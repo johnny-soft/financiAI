@@ -23,6 +23,7 @@ export async function GET() {
       supabase.from('transactions')
         .select('amount, type, account_id')
         .eq('user_id', user.id)
+        .neq('type', 'transfer')
         .gte('date', start)
         .lte('date', end),
       supabase.from('transactions')

@@ -6,6 +6,7 @@ import {
   getPluggyItem,
   mapPluggyAccountType,
   mapPluggyTransaction,
+  PLUGGY_CATEGORY_MAP,
 } from '@/lib/pluggy'
 
 export async function POST() {
@@ -37,6 +38,18 @@ export async function POST() {
     let totalAccountsSynced = 0
     let totalTransactionsSynced = 0
     const errors: string[] = []
+
+    // Load user's categories for auto-categorization
+    const { data: userCategories } = await supabase
+      .from('categories')
+      .select('id, name')
+      .eq('user_id', user.id)
+
+    // Build name → id lookup
+    const categoryLookup: Record<string, string> = {}
+    for (const cat of (userCategories ?? [])) {
+      categoryLookup[cat.name.toLowerCase()] = cat.id
+    }
 
     for (const itemId of itemIds) {
       try {
@@ -123,7 +136,17 @@ export async function POST() {
             for (const pTx of pluggyTransactions) {
               try {
                 const mapped = mapPluggyTransaction(pTx)
-                const txData = {
+
+                // Auto-categorize using Pluggy category
+                let category_id: string | null = null
+                if (mapped.pluggy_category) {
+                  const ourCategoryName = PLUGGY_CATEGORY_MAP[mapped.pluggy_category]
+                  if (ourCategoryName) {
+                    category_id = categoryLookup[ourCategoryName.toLowerCase()] || null
+                  }
+                }
+
+                const txData: Record<string, unknown> = {
                   user_id: user.id,
                   account_id: accountId,
                   pluggy_transaction_id: mapped.pluggy_transaction_id,
@@ -135,6 +158,7 @@ export async function POST() {
                   source: mapped.source,
                   metadata: JSON.stringify(mapped.metadata),
                 }
+                if (category_id) txData.category_id = category_id
 
                 // Use pluggy_transaction_id to avoid duplicates
                 const { data: existingTx } = await supabase

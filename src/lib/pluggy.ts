@@ -122,19 +122,103 @@ export function mapPluggyAccountType(type: string, subtype: string): string {
   return map[type] || 'other'
 }
 
-// Map Pluggy transaction to our format
+// Pluggy category → our category name mapping
+export const PLUGGY_CATEGORY_MAP: Record<string, string> = {
+  // Food
+  'Restaurants': 'Alimentação',
+  'Restaurants and Bars': 'Alimentação',
+  'Food and Grocery': 'Alimentação',
+  'Groceries': 'Alimentação',
+  'Fast Food': 'Alimentação',
+  // Transport
+  'Transportation': 'Transporte',
+  'Transport': 'Transporte',
+  'Gas': 'Transporte',
+  'Parking': 'Transporte',
+  'Tolls': 'Transporte',
+  'Uber': 'Transporte',
+  'Ride Sharing': 'Transporte',
+  // Home
+  'Housing': 'Moradia',
+  'Rent': 'Moradia',
+  'Utilities': 'Moradia',
+  'Home Improvement': 'Moradia',
+  // Health
+  'Health': 'Saúde',
+  'Healthcare': 'Saúde',
+  'Pharmacy': 'Saúde',
+  'Medical': 'Saúde',
+  // Education
+  'Education': 'Educação',
+  'Books': 'Educação',
+  // Entertainment
+  'Entertainment': 'Lazer',
+  'Recreation': 'Lazer',
+  'Sports': 'Lazer',
+  'Games': 'Lazer',
+  'Travel': 'Lazer',
+  // Clothing
+  'Clothing': 'Vestuário',
+  'Shopping': 'Vestuário',
+  // Subscriptions
+  'Subscriptions': 'Assinaturas',
+  'Digital Services': 'Assinaturas',
+  'Streaming': 'Assinaturas',
+  // Investments
+  'Investments': 'Investimentos',
+  'Savings': 'Investimentos',
+  // Income
+  'Salary': 'Salário',
+  'Wages': 'Salário',
+  'Freelance': 'Freelance',
+  'Interest': 'Rendimentos',
+  'Dividends': 'Rendimentos',
+  'Returns': 'Rendimentos',
+}
+
+// Descriptions/keywords that indicate a transfer (not income/expense)
+const TRANSFER_KEYWORDS = [
+  'transferencia entre contas', 'transferência entre contas',
+  'pagamento de fatura', 'pgto fatura', 'pag fatura',
+  'pagamento cartao', 'pagamento cartão',
+  'resgate', 'aplicação', 'aplicacao',
+  'transferência própria', 'transferencia propria',
+  'pix enviado', 'pix recebido',
+]
+
+function isTransfer(description: string, category?: string): boolean {
+  const desc = description.toLowerCase()
+  // Check known transfer patterns
+  if (TRANSFER_KEYWORDS.some(kw => desc.includes(kw))) return true
+  // Pluggy category indicates transfer
+  if (category && ['Transfer', 'Transfers', 'Credit Card Payment'].includes(category)) return true
+  return false
+}
+
 export function mapPluggyTransaction(tx: PluggyTransaction) {
   const isCredit = tx.type === 'CREDIT'
+  const pluggyCategory = tx.category || ''
+
+  // Determine transaction type: income, expense, or transfer
+  let type: 'income' | 'expense' | 'transfer'
+  if (isTransfer(tx.description, pluggyCategory)) {
+    type = 'transfer'
+  } else if (isCredit) {
+    type = 'income'
+  } else {
+    type = 'expense'
+  }
 
   return {
     pluggy_transaction_id: tx.id,
     description: tx.description,
     amount: Math.abs(tx.amount),
-    type: isCredit ? 'income' : 'expense',
+    type,
     date: tx.date.split('T')[0],
     payment_method: mapPaymentMethod(tx.paymentData?.paymentMethod),
     source: 'pluggy' as const,
-    metadata: { pluggy_category: tx.category },
+    pluggy_category: pluggyCategory, // exposed for auto-categorization
+    metadata: { pluggy_category: pluggyCategory },
   }
 }
 
