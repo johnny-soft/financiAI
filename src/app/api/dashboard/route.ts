@@ -85,40 +85,51 @@ export async function GET() {
 
     // Credit Card bill = calculated using billing cycle dates (if configured)
     let totalCreditDebt = 0
+    const debugInfo: Record<string, unknown> = {}
 
     if (creditCardAccounts.length > 0) {
+      debugInfo.creditCardAccounts = creditCardAccounts.map(a => ({
+        id: a.id, name: a.name, type: a.type,
+        closing_day: a.closing_day, due_day: a.due_day,
+      }))
+
       // Get the closing day from the first credit card (or use default)
       const closingDay = creditCardAccounts[0].closing_day
 
+      let billingStart: string
+      let billingEnd: string
+
       if (closingDay) {
-        // Use billing cycle: from last closing+1 to this closing
         const billing = getBillingPeriod(closingDay)
-
-        const { data: billTx } = await supabase
-          .from('transactions')
-          .select('amount')
-          .eq('user_id', user.id)
-          .eq('type', 'expense')
-          .in('account_id', creditCardAccounts.map(a => a.id))
-          .gte('date', billing.start)
-          .lte('date', billing.end)
-
-        totalCreditDebt = (billTx ?? [])
-          .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+        billingStart = billing.start
+        billingEnd = billing.end
       } else {
         // No closing day configured → use current month as fallback
-        const { data: billTx } = await supabase
-          .from('transactions')
-          .select('amount')
-          .eq('user_id', user.id)
-          .eq('type', 'expense')
-          .in('account_id', creditCardAccounts.map(a => a.id))
-          .gte('date', start)
-          .lte('date', end)
-
-        totalCreditDebt = (billTx ?? [])
-          .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+        billingStart = start
+        billingEnd = end
       }
+
+      debugInfo.billingPeriod = { start: billingStart, end: billingEnd, closingDay }
+
+      const { data: billTx } = await supabase
+        .from('transactions')
+        .select('amount, description, date, type')
+        .eq('user_id', user.id)
+        .eq('type', 'expense')
+        .in('account_id', creditCardAccounts.map(a => a.id))
+        .gte('date', billingStart)
+        .lte('date', billingEnd)
+
+      debugInfo.billTransactionCount = (billTx ?? []).length
+      debugInfo.billTransactions = (billTx ?? []).slice(0, 5).map(t => ({
+        desc: t.description, amount: t.amount, date: t.date, type: t.type,
+      }))
+
+      totalCreditDebt = (billTx ?? [])
+        .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+    } else {
+      debugInfo.note = 'No credit card accounts found (type !== credit)'
+      debugInfo.allAccountTypes = accounts.map(a => ({ name: a.name, type: a.type }))
     }
 
     // Income = only from non-credit-card accounts (real income)
@@ -146,6 +157,7 @@ export async function GET() {
         topCategories: (categoryRes.data ?? []).slice(0, 6),
         monthlyTrend: trendRes.data ?? [],
         unreadInsights: insightsRes.count ?? 0,
+        _debug: debugInfo,
       }
     })
   } catch (err) {
