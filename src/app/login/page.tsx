@@ -35,19 +35,30 @@ export default function LoginPage() {
 
         // If email confirmation is disabled, user is auto-confirmed
         if (data.session) {
+          // Wait for cookie to be set by @supabase/ssr
+          await new Promise(r => setTimeout(r, 500))
           window.location.href = '/dashboard'
           return
         }
 
         setMessage('Conta criada! Verifique seu e-mail para confirmar o cadastro.')
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         })
         if (error) throw error
+        if (!data.session) throw new Error('Sessão não foi criada. Tente novamente.')
 
-        // Full page reload to ensure cookies are sent to middleware
+        // Wait for cookie to be set by @supabase/ssr
+        await new Promise(r => setTimeout(r, 500))
+
+        // Verify session was actually persisted
+        const { data: check } = await supabase.auth.getSession()
+        if (!check.session) {
+          throw new Error('Sessão não persistiu. Verifique a configuração do Supabase.')
+        }
+
         window.location.href = '/dashboard'
         return
       }
