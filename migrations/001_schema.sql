@@ -1,6 +1,29 @@
 -- ============================================
--- FinTrack - Schema Completo Supabase
+-- FinTrack - RESET & REBUILD
+-- Run this in Supabase SQL Editor
 -- ============================================
+
+-- Drop everything first (in correct order due to FK constraints)
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
+DROP TRIGGER IF EXISTS update_accounts_updated_at ON accounts;
+DROP TRIGGER IF EXISTS update_transactions_updated_at ON transactions;
+DROP TRIGGER IF EXISTS update_goals_updated_at ON goals;
+
+DROP FUNCTION IF EXISTS handle_new_user() CASCADE;
+DROP FUNCTION IF EXISTS update_updated_at() CASCADE;
+DROP FUNCTION IF EXISTS get_spending_by_category(UUID, DATE, DATE) CASCADE;
+DROP FUNCTION IF EXISTS get_monthly_balance(UUID, INT) CASCADE;
+
+DROP TABLE IF EXISTS pluggy_sync_log CASCADE;
+DROP TABLE IF EXISTS ai_insights CASCADE;
+DROP TABLE IF EXISTS budgets CASCADE;
+DROP TABLE IF EXISTS goal_contributions CASCADE;
+DROP TABLE IF EXISTS goals CASCADE;
+DROP TABLE IF EXISTS transactions CASCADE;
+DROP TABLE IF EXISTS accounts CASCADE;
+DROP TABLE IF EXISTS categories CASCADE;
+DROP TABLE IF EXISTS profiles CASCADE;
 
 -- Enable extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -14,7 +37,7 @@ CREATE TABLE profiles (
   avatar_url TEXT,
   monthly_income DECIMAL(12,2) DEFAULT 0,
   currency TEXT DEFAULT 'BRL',
-  pluggy_item_ids TEXT[] DEFAULT '{}', -- IDs das conexões Pluggy
+  pluggy_item_ids TEXT[] DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -41,17 +64,16 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage own categories" ON categories
   FOR ALL USING (auth.uid() = user_id);
 
--- Categorias padrão são inseridas via trigger após criar perfil
 CREATE INDEX idx_categories_user_id ON categories(user_id);
 
 -- ============================================
--- ACCOUNTS (contas bancárias)
+-- ACCOUNTS
 -- ============================================
 CREATE TABLE accounts (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-  pluggy_account_id TEXT UNIQUE, -- ID da conta no Pluggy
-  pluggy_item_id TEXT,           -- ID do item (conexão) no Pluggy
+  pluggy_account_id TEXT UNIQUE,
+  pluggy_item_id TEXT,
   name TEXT NOT NULL,
   institution TEXT,
   institution_logo TEXT,
@@ -80,7 +102,7 @@ CREATE TABLE transactions (
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
   category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
-  pluggy_transaction_id TEXT UNIQUE, -- Evita duplicatas do Pluggy
+  pluggy_transaction_id TEXT UNIQUE,
   description TEXT NOT NULL,
   amount DECIMAL(12,2) NOT NULL,
   type TEXT CHECK (type IN ('income', 'expense', 'transfer')) NOT NULL,
@@ -88,7 +110,7 @@ CREATE TABLE transactions (
   notes TEXT,
   tags TEXT[] DEFAULT '{}',
   is_recurring BOOLEAN DEFAULT FALSE,
-  recurrence_rule TEXT, -- 'monthly', 'weekly', etc.
+  recurrence_rule TEXT,
   payment_method TEXT CHECK (payment_method IN ('pix', 'credit', 'debit', 'cash', 'transfer', 'boleto', 'other')) DEFAULT 'other',
   source TEXT CHECK (source IN ('pluggy', 'manual', 'import')) DEFAULT 'manual',
   metadata JSONB DEFAULT '{}',
@@ -107,7 +129,7 @@ CREATE INDEX idx_transactions_category ON transactions(category_id);
 CREATE INDEX idx_transactions_type ON transactions(type);
 
 -- ============================================
--- GOALS (metas financeiras)
+-- GOALS
 -- ============================================
 CREATE TABLE goals (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -131,7 +153,7 @@ CREATE POLICY "Users can manage own goals" ON goals
 CREATE INDEX idx_goals_user_id ON goals(user_id);
 
 -- ============================================
--- GOAL CONTRIBUTIONS (aportes nas metas)
+-- GOAL CONTRIBUTIONS
 -- ============================================
 CREATE TABLE goal_contributions (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -148,7 +170,7 @@ CREATE POLICY "Users can manage own goal contributions" ON goal_contributions
   FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================
--- BUDGETS (orçamentos mensais por categoria)
+-- BUDGETS
 -- ============================================
 CREATE TABLE budgets (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -168,7 +190,7 @@ CREATE POLICY "Users can manage own budgets" ON budgets
 CREATE INDEX idx_budgets_user_period ON budgets(user_id, year, month);
 
 -- ============================================
--- AI INSIGHTS (recomendações da IA)
+-- AI INSIGHTS
 -- ============================================
 CREATE TABLE ai_insights (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -208,15 +230,25 @@ CREATE POLICY "Users can view own sync logs" ON pluggy_sync_log
 
 -- ============================================
 -- TRIGGER: Auto-create profile on signup
+-- (simplified & robust version)
 -- ============================================
 CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
 BEGIN
-  INSERT INTO profiles (id, full_name, avatar_url)
-  VALUES (NEW.id, NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'avatar_url');
-  
+  -- Create profile
+  INSERT INTO public.profiles (id, full_name, avatar_url)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+    NEW.raw_user_meta_data->>'avatar_url'
+  );
+
   -- Insert default categories
-  INSERT INTO categories (user_id, name, icon, color, type, is_default) VALUES
+  INSERT INTO public.categories (user_id, name, icon, color, type, is_default) VALUES
     (NEW.id, 'Alimentação', '🍔', '#f59e0b', 'expense', true),
     (NEW.id, 'Transporte', '🚗', '#3b82f6', 'expense', true),
     (NEW.id, 'Moradia', '🏠', '#8b5cf6', 'expense', true),
@@ -229,12 +261,17 @@ BEGIN
     (NEW.id, 'Outros gastos', '💸', '#6b7280', 'expense', true),
     (NEW.id, 'Salário', '💼', '#10b981', 'income', true),
     (NEW.id, 'Freelance', '💻', '#6366f1', 'income', true),
-    (NEW.id, 'Investimentos', '📊', '#0ea5e9', 'income', true),
+    (NEW.id, 'Rendimentos', '📊', '#0ea5e9', 'income', true),
     (NEW.id, 'Outros ganhos', '✨', '#a78bfa', 'income', true);
-  
+
   RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Log but don't block signup
+    RAISE WARNING 'handle_new_user failed: %', SQLERRM;
+    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -261,10 +298,8 @@ CREATE TRIGGER update_goals_updated_at BEFORE UPDATE ON goals
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ============================================
--- FUNCTIONS úteis
+-- FUNCTIONS
 -- ============================================
-
--- Soma de gastos por categoria em um período
 CREATE OR REPLACE FUNCTION get_spending_by_category(
   p_user_id UUID,
   p_start DATE,
@@ -273,14 +308,14 @@ CREATE OR REPLACE FUNCTION get_spending_by_category(
 RETURNS TABLE(category_id UUID, category_name TEXT, category_icon TEXT, category_color TEXT, total DECIMAL) AS $$
 BEGIN
   RETURN QUERY
-  SELECT 
+  SELECT
     c.id,
     c.name,
     c.icon,
     c.color,
     COALESCE(SUM(t.amount), 0) as total
   FROM categories c
-  LEFT JOIN transactions t ON t.category_id = c.id 
+  LEFT JOIN transactions t ON t.category_id = c.id
     AND t.user_id = p_user_id
     AND t.type = 'expense'
     AND t.date BETWEEN p_start AND p_end
@@ -290,7 +325,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Saldo mensal (receitas - despesas) por mês
 CREATE OR REPLACE FUNCTION get_monthly_balance(
   p_user_id UUID,
   p_months INT DEFAULT 6
@@ -298,7 +332,7 @@ CREATE OR REPLACE FUNCTION get_monthly_balance(
 RETURNS TABLE(month TEXT, income DECIMAL, expense DECIMAL, balance DECIMAL) AS $$
 BEGIN
   RETURN QUERY
-  SELECT 
+  SELECT
     TO_CHAR(DATE_TRUNC('month', t.date), 'YYYY-MM') as month,
     COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as income,
     COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) as expense,

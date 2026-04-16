@@ -24,7 +24,7 @@ export default function LoginPage() {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -32,6 +32,13 @@ export default function LoginPage() {
           },
         })
         if (error) throw error
+
+        // If email confirmation is disabled, user is auto-confirmed
+        if (data.session) {
+          window.location.href = '/dashboard'
+          return
+        }
+
         setMessage('Conta criada! Verifique seu e-mail para confirmar o cadastro.')
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -39,11 +46,23 @@ export default function LoginPage() {
           password,
         })
         if (error) throw error
-        router.push('/dashboard')
-        router.refresh()
+
+        // Full page reload to ensure cookies are sent to middleware
+        window.location.href = '/dashboard'
+        return
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro inesperado')
+      const message = err instanceof Error ? err.message : 'Erro inesperado'
+      // Translate common Supabase errors
+      if (message.includes('Invalid login credentials')) {
+        setError('E-mail ou senha incorretos')
+      } else if (message.includes('Email not confirmed')) {
+        setError('E-mail não confirmado. Verifique sua caixa de entrada.')
+      } else if (message.includes('User already registered')) {
+        setError('Este e-mail já está cadastrado. Tente fazer login.')
+      } else {
+        setError(message)
+      }
     } finally {
       setLoading(false)
     }
