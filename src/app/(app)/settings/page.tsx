@@ -11,17 +11,18 @@ interface Profile {
   currency: string
 }
 
-interface CreditCardAccount {
+interface BankAccount {
   id: string
   name: string
   institution: string | null
+  type: string
   closing_day: number | null
   due_day: number | null
 }
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile>({ full_name: '', monthly_income: 0, currency: 'BRL' })
-  const [creditCards, setCreditCards] = useState<CreditCardAccount[]>([])
+  const [creditCards, setCreditCards] = useState<BankAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
@@ -32,7 +33,7 @@ export default function SettingsPage() {
 
     const [profileRes, accountsRes] = await Promise.all([
       supabase.from('profiles').select('full_name, monthly_income, currency').eq('id', user.id).single(),
-      supabase.from('accounts').select('id, name, institution, closing_day, due_day').eq('user_id', user.id).eq('type', 'credit'),
+      supabase.from('accounts').select('id, name, institution, type, closing_day, due_day').eq('user_id', user.id).eq('is_active', true),
     ])
 
     if (profileRes.data) {
@@ -42,7 +43,17 @@ export default function SettingsPage() {
         currency: profileRes.data.currency || 'BRL',
       })
     }
-    setCreditCards(accountsRes.data ?? [])
+
+    // Show all accounts — let user configure billing cycle on any of them
+    const allAccounts = accountsRes.data ?? []
+    setCreditCards(allAccounts.map(a => ({
+      id: a.id,
+      name: a.name,
+      institution: a.institution,
+      type: a.type,
+      closing_day: a.closing_day ?? null,
+      due_day: a.due_day ?? null,
+    })))
     setLoading(false)
   }, [supabase])
 
@@ -67,10 +78,11 @@ export default function SettingsPage() {
     setSaving(false)
   }
 
-  const handleSaveCard = async (card: CreditCardAccount) => {
+  const handleSaveCard = async (card: BankAccount) => {
     const { error } = await supabase.from('accounts').update({
       closing_day: card.closing_day,
       due_day: card.due_day,
+      type: card.type,
     }).eq('id', card.id)
 
     if (error) {
@@ -155,10 +167,10 @@ export default function SettingsPage() {
         <div className="card" style={{ padding: '1.25rem' }}>
           <h2 style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: 8 }}>
             <CreditCard size={16} />
-            Cartões de Crédito
+            Contas Bancárias
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginBottom: '1rem' }}>
-            Configure o dia de fechamento e vencimento de cada cartão para cálculos precisos da fatura.
+            Configure o tipo da conta e o dia de fechamento/vencimento dos cartões de crédito.
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -185,13 +197,28 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <p style={{ fontWeight: 600, fontSize: '0.875rem' }}>{card.name}</p>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{card.institution ?? 'Cartão de crédito'}</p>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{card.institution ?? 'Conta bancária'}</p>
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.75rem', alignItems: 'end' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '0.75rem', alignItems: 'end' }}>
                   <div>
-                    <label style={labelStyle}>Dia do fechamento</label>
+                    <label style={labelStyle}>Tipo da conta</label>
+                    <select
+                      value={card.type}
+                      onChange={e => setCreditCards(prev => prev.map(c => c.id === card.id ? { ...c, type: e.target.value } : c))}
+                      style={inputStyle}
+                    >
+                      <option value="checking">Conta corrente</option>
+                      <option value="savings">Poupança</option>
+                      <option value="credit">Cartão de crédito</option>
+                      <option value="investment">Investimento</option>
+                      <option value="wallet">Carteira</option>
+                      <option value="other">Outro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Dia fechamento</label>
                     <input
                       type="number"
                       min={1}
@@ -200,10 +227,11 @@ export default function SettingsPage() {
                       onChange={e => updateCard(card.id, 'closing_day', e.target.value)}
                       style={inputStyle}
                       placeholder="Ex: 15"
+                      disabled={card.type !== 'credit'}
                     />
                   </div>
                   <div>
-                    <label style={labelStyle}>Dia do vencimento</label>
+                    <label style={labelStyle}>Dia vencimento</label>
                     <input
                       type="number"
                       min={1}
@@ -212,6 +240,7 @@ export default function SettingsPage() {
                       onChange={e => updateCard(card.id, 'due_day', e.target.value)}
                       style={inputStyle}
                       placeholder="Ex: 25"
+                      disabled={card.type !== 'credit'}
                     />
                   </div>
                   <button
@@ -224,9 +253,11 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
-                <p style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginTop: 8 }}>
-                  💡 O fechamento define o período da fatura. Ex: fechamento dia 15 → a fatura de abril vai do dia 16/mar ao dia 15/abr.
-                </p>
+                {card.type === 'credit' && (
+                  <p style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginTop: 8 }}>
+                    💡 O fechamento define o período da fatura. Ex: fechamento dia 15 → a fatura de abril vai do dia 16/mar ao dia 15/abr.
+                  </p>
+                )}
               </div>
             ))}
           </div>
