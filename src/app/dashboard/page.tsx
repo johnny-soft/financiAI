@@ -317,7 +317,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {data.unreadInsights} nova{data.unreadInsights > 1 ? 's' : ''} recomendação{data.unreadInsights > 1 ? 'ões' : ''} da IA
+                  {data?.unreadInsights} nova{(data?.unreadInsights ?? 0) > 1 ? 's' : ''} recomendação{(data?.unreadInsights ?? 0) > 1 ? 'ões' : ''} da IA
                 </p>
                 <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 2 }}>
                   Clique para ver insights personalizados sobre suas finanças →
