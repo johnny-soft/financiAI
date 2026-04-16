@@ -201,8 +201,8 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '0.75rem', alignItems: 'end' }}>
-                  <div>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'end', flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 160 }}>
                     <label style={labelStyle}>Tipo da conta</label>
                     <select
                       value={card.type}
@@ -217,32 +217,36 @@ export default function SettingsPage() {
                       <option value="other">Outro</option>
                     </select>
                   </div>
-                  <div>
-                    <label style={labelStyle}>Dia fechamento</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={31}
-                      value={card.closing_day ?? ''}
-                      onChange={e => updateCard(card.id, 'closing_day', e.target.value)}
-                      style={inputStyle}
-                      placeholder="Ex: 15"
-                      disabled={card.type !== 'credit'}
-                    />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Dia vencimento</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={31}
-                      value={card.due_day ?? ''}
-                      onChange={e => updateCard(card.id, 'due_day', e.target.value)}
-                      style={inputStyle}
-                      placeholder="Ex: 25"
-                      disabled={card.type !== 'credit'}
-                    />
-                  </div>
+
+                  {card.type === 'credit' && (
+                    <>
+                      <div style={{ minWidth: 120 }}>
+                        <label style={labelStyle}>Dia fechamento</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={31}
+                          value={card.closing_day ?? ''}
+                          onChange={e => updateCard(card.id, 'closing_day', e.target.value)}
+                          style={inputStyle}
+                          placeholder="Ex: 15"
+                        />
+                      </div>
+                      <div style={{ minWidth: 120 }}>
+                        <label style={labelStyle}>Dia vencimento</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={31}
+                          value={card.due_day ?? ''}
+                          onChange={e => updateCard(card.id, 'due_day', e.target.value)}
+                          style={inputStyle}
+                          placeholder="Ex: 25"
+                        />
+                      </div>
+                    </>
+                  )}
+
                   <button
                     className="btn btn-primary"
                     onClick={() => handleSaveCard(card)}
