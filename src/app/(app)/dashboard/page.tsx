@@ -49,7 +49,7 @@ export default function DashboardPage() {
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
-          label="Saldo Total"
+          label="Saldo Bancário"
           value={formatCurrency(data?.totalBalance ?? 0)}
           icon={<Wallet size={18} />}
           color="var(--accent)"
@@ -68,12 +68,22 @@ export default function DashboardPage() {
           color="var(--danger)"
           negative
         />
-        <StatCard
-          label="Taxa de Poupança"
-          value={`${data?.savingsRate ?? 0}%`}
-          icon={<PiggyBank size={18} />}
-          color="var(--warning)"
-        />
+        {(data?.totalCreditDebt ?? 0) > 0 ? (
+          <StatCard
+            label="Fatura Cartão"
+            value={formatCurrency(data?.totalCreditDebt ?? 0)}
+            icon={<PiggyBank size={18} />}
+            color="var(--danger)"
+            negative
+          />
+        ) : (
+          <StatCard
+            label="Taxa de Poupança"
+            value={`${data?.savingsRate ?? 0}%`}
+            icon={<PiggyBank size={18} />}
+            color="var(--warning)"
+          />
+        )}
       </div>
 
       {/* Charts row */}
@@ -246,7 +256,7 @@ export default function DashboardPage() {
                       fontWeight: 600,
                       color: tx.type === 'income' ? 'var(--success)' : 'var(--danger)'
                     }}>
-                      {formatCurrency(tx.amount)}
+                      {formatCurrency(Number(tx.amount))}
                     </span>
                   </div>
                 </div>
@@ -290,9 +300,9 @@ export default function DashboardPage() {
                     <span style={{
                       fontSize: '0.9375rem',
                       fontWeight: 600,
-                      color: acc.balance >= 0 ? 'var(--text-primary)' : 'var(--danger)'
+                      color: Number(acc.balance) >= 0 ? 'var(--text-primary)' : 'var(--danger)'
                     }}>
-                      {formatCurrency(acc.balance)}
+                      {formatCurrency(Number(acc.balance))}
                     </span>
                   </div>
                 ))}

@@ -34,8 +34,8 @@ export async function POST() {
     const categories = (categoryRes.data ?? []).filter((c: { total: number }) => c.total > 0)
     const monthlyIncome = profileRes.data?.monthly_income ?? 0
 
-    const totalIncome = transactions.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0)
-    const totalExpense = transactions.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0)
+    const totalIncome = transactions.filter((t) => t.type === 'income').reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+    const totalExpense = transactions.filter((t) => t.type === 'expense').reduce((a, t) => a + parseFloat(String(t.amount)), 0)
     const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : '0'
 
     const financialSummary = {

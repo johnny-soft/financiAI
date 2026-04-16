@@ -128,6 +128,7 @@ export interface AIInsight {
 // Dashboard summary types
 export interface DashboardSummary {
   totalBalance: number
+  totalCreditDebt: number
   monthIncome: number
   monthExpense: number
   monthBalance: number

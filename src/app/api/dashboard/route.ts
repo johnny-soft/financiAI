@@ -21,7 +21,7 @@ export async function GET() {
     ] = await Promise.all([
       supabase.from('accounts').select('*').eq('user_id', user.id).eq('is_active', true),
       supabase.from('transactions')
-        .select('amount, type')
+        .select('amount, type, account_id')
         .eq('user_id', user.id)
         .gte('date', start)
         .lte('date', end),
@@ -41,14 +41,40 @@ export async function GET() {
 
     const accounts = accountsRes.data ?? []
     const monthTx = monthTxRes.data ?? []
-    const monthIncome = monthTx.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0)
-    const monthExpense = monthTx.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0)
-    const totalBalance = accounts.reduce((a, acc) => a + (acc.balance ?? 0), 0)
+
+    // Separate accounts by type
+    const creditCardAccountIds = new Set(
+      accounts.filter(a => a.type === 'credit').map(a => a.id)
+    )
+
+    // Total Balance = only non-credit-card accounts (checking, savings, investment, wallet)
+    const totalBalance = accounts
+      .filter(a => a.type !== 'credit')
+      .reduce((a, acc) => a + parseFloat(String(acc.balance ?? 0)), 0)
+
+    // Credit Card Debt = sum of credit card balances (shown as separate stat)
+    const totalCreditDebt = accounts
+      .filter(a => a.type === 'credit')
+      .reduce((a, acc) => a + parseFloat(String(acc.balance ?? 0)), 0)
+
+    // For income/expense calculation, exclude credit card transactions
+    // to avoid double-counting (card purchases + card bill payment from checking)
+    // We count only checking/savings/wallet transactions as the "real" cash flow
+    const cashFlowTx = monthTx.filter(t => !creditCardAccountIds.has(t.account_id))
+
+    const monthIncome = cashFlowTx
+      .filter((t) => t.type === 'income')
+      .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+    const monthExpense = cashFlowTx
+      .filter((t) => t.type === 'expense')
+      .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+
     const savingsRate = monthIncome > 0 ? Math.round(((monthIncome - monthExpense) / monthIncome) * 100) : 0
 
     return NextResponse.json({
       data: {
         totalBalance,
+        totalCreditDebt,
         monthIncome,
         monthExpense,
         monthBalance: monthIncome - monthExpense,
