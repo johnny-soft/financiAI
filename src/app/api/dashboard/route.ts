@@ -14,21 +14,31 @@ export async function GET() {
     const [
       accountsRes,
       monthTxRes,
+      creditCardTxRes,
       recentTxRes,
       categoryRes,
       trendRes,
       insightsRes,
     ] = await Promise.all([
       supabase.from('accounts').select('*').eq('user_id', user.id).eq('is_active', true),
+      // Monthly income/expenses (excludes transfers)
       supabase.from('transactions')
         .select('amount, type, account_id')
         .eq('user_id', user.id)
         .neq('type', 'transfer')
         .gte('date', start)
         .lte('date', end),
+      // Credit card expenses this month (for "Fatura Cartão" stat)
       supabase.from('transactions')
-        .select('*, category:categories(id,name,icon,color), account:accounts(id,name)')
+        .select('amount, account_id')
         .eq('user_id', user.id)
+        .eq('type', 'expense')
+        .gte('date', start)
+        .lte('date', end),
+      supabase.from('transactions')
+        .select('*, category:categories(id,name,icon,color), account:accounts(id,name,type)')
+        .eq('user_id', user.id)
+        .neq('type', 'transfer')
         .order('date', { ascending: false })
         .limit(10),
       supabase.rpc('get_spending_by_category', { p_user_id: user.id, p_start: start, p_end: end }),
@@ -42,23 +52,30 @@ export async function GET() {
 
     const accounts = accountsRes.data ?? []
     const monthTx = monthTxRes.data ?? []
+    const creditCardTx = creditCardTxRes.data ?? []
 
-    // Total Balance = only non-credit-card accounts (checking, savings, investment, wallet)
+    // Credit card account IDs
+    const creditCardAccountIds = new Set(
+      accounts.filter(a => a.type === 'credit').map(a => a.id)
+    )
+
+    // Total Balance = only non-credit-card accounts
     const totalBalance = accounts
       .filter(a => a.type !== 'credit')
       .reduce((a, acc) => a + parseFloat(String(acc.balance ?? 0)), 0)
 
-    // Credit Card Debt = sum of credit card balances (shown as separate stat)
-    const totalCreditDebt = accounts
-      .filter(a => a.type === 'credit')
-      .reduce((a, acc) => a + parseFloat(String(acc.balance ?? 0)), 0)
-
-    // Include ALL transactions for income/expense — credit card transactions
-    // are the real purchases. The card bill payment from checking will show
-    // as an expense too, but that's more reliable than showing nothing.
-    const monthIncome = monthTx
-      .filter((t) => t.type === 'income')
+    // Credit Card bill THIS MONTH = sum of credit card expense transactions this month
+    // (not the total balance, which includes previous months' debt)
+    const monthCreditCardExpenses = creditCardTx
+      .filter(t => creditCardAccountIds.has(t.account_id))
       .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+
+    // Income = only from non-credit-card accounts (real income)
+    const monthIncome = monthTx
+      .filter((t) => t.type === 'income' && !creditCardAccountIds.has(t.account_id))
+      .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+
+    // Expenses = all expense transactions this month (includes credit card purchases)
     const monthExpense = monthTx
       .filter((t) => t.type === 'expense')
       .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
@@ -68,7 +85,7 @@ export async function GET() {
     return NextResponse.json({
       data: {
         totalBalance,
-        totalCreditDebt,
+        totalCreditDebt: monthCreditCardExpenses,
         monthIncome,
         monthExpense,
         monthBalance: monthIncome - monthExpense,
