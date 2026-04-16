@@ -236,9 +236,13 @@ export default function AccountsPage() {
                       {account.name}
                     </p>
                     {account.pluggy_account_id ? (
-                      <Wifi size={12} style={{ color: 'var(--success)' }} title="Sincronizada via Pluggy" />
+                      <span title="Sincronizada via Pluggy" className="flex">
+                        <Wifi size={12} style={{ color: 'var(--success)' }} />
+                      </span>
                     ) : (
-                      <WifiOff size={12} style={{ color: 'var(--text-muted)' }} title="Manual" />
+                      <span title="Manual" className="flex">
+                        <WifiOff size={12} style={{ color: 'var(--text-muted)' }} />
+                      </span>
                     )}
                   </div>
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
