@@ -195,13 +195,19 @@ function isTransfer(description: string, category?: string): boolean {
   return false
 }
 
-export function mapPluggyTransaction(tx: PluggyTransaction) {
+export function mapPluggyTransaction(tx: PluggyTransaction, accountType?: string) {
   const isCredit = tx.type === 'CREDIT'
   const pluggyCategory = tx.category || ''
 
   // Determine transaction type: income, expense, or transfer
   let type: 'income' | 'expense' | 'transfer'
-  if (isTransfer(tx.description, pluggyCategory)) {
+
+  if (accountType === 'credit') {
+    // Credit card account logic:
+    // CREDIT on a card = payment received or refund → always a transfer
+    // DEBIT on a card = purchase → expense
+    type = isCredit ? 'transfer' : 'expense'
+  } else if (isTransfer(tx.description, pluggyCategory)) {
     type = 'transfer'
   } else if (isCredit) {
     type = 'income'
@@ -217,7 +223,7 @@ export function mapPluggyTransaction(tx: PluggyTransaction) {
     date: tx.date.split('T')[0],
     payment_method: mapPaymentMethod(tx.paymentData?.paymentMethod),
     source: 'pluggy' as const,
-    pluggy_category: pluggyCategory, // exposed for auto-categorization
+    pluggy_category: pluggyCategory,
     metadata: { pluggy_category: pluggyCategory },
   }
 }

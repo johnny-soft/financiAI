@@ -133,9 +133,11 @@ export async function POST() {
             console.log(`Account ${pAccount.name}: found ${pluggyTransactions.length} transactions`)
 
             // 4. Upsert transactions
+            const ourAccountType = mapPluggyAccountType(pAccount.type, pAccount.subtype || '')
+
             for (const pTx of pluggyTransactions) {
               try {
-                const mapped = mapPluggyTransaction(pTx)
+                const mapped = mapPluggyTransaction(pTx, ourAccountType)
 
                 // Auto-categorize using Pluggy category
                 let category_id: string | null = null
