@@ -80,21 +80,37 @@ export async function getPluggyAccounts(itemId: string): Promise<PluggyAccount[]
   return data.results
 }
 
-// Get transactions for an account
+// Get transactions for an account (with pagination to get ALL)
 export async function getPluggyTransactions(
   accountId: string,
   from?: string,
   to?: string
 ): Promise<PluggyTransaction[]> {
-  const params = new URLSearchParams({ accountId })
-  if (from) params.set('from', from)
-  if (to) params.set('to', to)
-  params.set('pageSize', '500')
+  const allTransactions: PluggyTransaction[] = []
+  let page = 1
+  const pageSize = 500
 
-  const data = await pluggyFetch<{ results: PluggyTransaction[]; total: number }>(
-    `/transactions?${params}`
-  )
-  return data.results
+  while (true) {
+    const params = new URLSearchParams({ accountId })
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    params.set('pageSize', String(pageSize))
+    params.set('page', String(page))
+
+    const data = await pluggyFetch<{ results: PluggyTransaction[]; total: number; page: number; totalPages: number }>(
+      `/transactions?${params}`
+    )
+
+    allTransactions.push(...data.results)
+
+    // Stop if we got all transactions
+    if (allTransactions.length >= data.total || data.results.length < pageSize) {
+      break
+    }
+    page++
+  }
+
+  return allTransactions
 }
 
 // Create a Connect Token for frontend widget
