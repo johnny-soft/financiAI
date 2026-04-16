@@ -13,26 +13,41 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [debug, setDebug] = useState<string[]>([])
   const router = useRouter()
   const supabase = createClient()
 
-  // If already logged in, redirect to dashboard
+  const addDebug = (msg: string) => setDebug(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`])
+
+  // Check connection on mount
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    addDebug(`SUPABASE_URL: ${url ? url.substring(0, 30) + '...' : 'NOT SET!'}`)
+    addDebug(`ANON_KEY: ${key ? key.substring(0, 10) + '...' : 'NOT SET!'}`)
+
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        addDebug(`getSession error: ${error.message}`)
+      } else if (session) {
+        addDebug(`Already has session, redirecting...`)
         window.location.href = '/dashboard'
+      } else {
+        addDebug('No existing session - ready to login')
       }
     })
-  }, [supabase])
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
     setMessage(null)
+    addDebug(`Attempting ${isSignUp ? 'signup' : 'login'} with ${email}`)
 
     try {
       if (isSignUp) {
+        addDebug('Calling signUp...')
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -41,33 +56,36 @@ export default function LoginPage() {
           },
         })
         if (error) throw error
+        addDebug(`signUp response: session=${!!data.session}, user=${!!data.user}`)
 
-        // If email confirmation is disabled, user is auto-confirmed
         if (data.session) {
-          // Wait for cookie to be set by @supabase/ssr
+          addDebug('Session created, waiting 500ms...')
           await new Promise(r => setTimeout(r, 500))
+          addDebug('Redirecting to /dashboard')
           window.location.href = '/dashboard'
           return
         }
 
         setMessage('Conta criada! Verifique seu e-mail para confirmar o cadastro.')
       } else {
+        addDebug('Calling signInWithPassword...')
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         })
         if (error) throw error
+        addDebug(`Login response: session=${!!data.session}, user=${!!data.user}`)
+
         if (!data.session) throw new Error('Sessão não foi criada. Tente novamente.')
 
-        // Wait for cookie to be set by @supabase/ssr
+        addDebug('Session created, waiting 500ms...')
         await new Promise(r => setTimeout(r, 500))
 
         // Verify session was actually persisted
         const { data: check } = await supabase.auth.getSession()
-        if (!check.session) {
-          throw new Error('Sessão não persistiu. Verifique a configuração do Supabase.')
-        }
+        addDebug(`Session check: ${!!check.session}`)
 
+        addDebug('Redirecting to /dashboard')
         window.location.href = '/dashboard'
         return
       }
@@ -272,6 +290,27 @@ export default function LoginPage() {
             {isSignUp ? 'Entrar' : 'Criar conta'}
           </button>
         </p>
+
+        {/* Debug Panel - remove after fixing auth */}
+        {debug.length > 0 && (
+          <div style={{
+            marginTop: '1.5rem',
+            padding: '12px',
+            borderRadius: 8,
+            background: 'var(--bg-subtle)',
+            border: '1px solid var(--border)',
+            fontSize: '0.75rem',
+            fontFamily: 'monospace',
+            color: 'var(--text-muted)',
+            maxHeight: 200,
+            overflowY: 'auto',
+          }}>
+            <p style={{ fontWeight: 600, marginBottom: 4 }}>🔍 Debug Log:</p>
+            {debug.map((line, i) => (
+              <div key={i} style={{ marginBottom: 2 }}>{line}</div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
