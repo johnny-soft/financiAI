@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ArrowLeftRight, Tag, Target,
   BarChart2, Settings, Sparkles, RefreshCw,
-  ChevronRight, Sun, Moon, Landmark, Menu, X
+  ChevronRight, Sun, Moon, Landmark, Menu, X, LogOut
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Painel' },
@@ -26,6 +27,7 @@ const bottomItems = [
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [dark, setDark] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -42,6 +44,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setDark(next)
     document.documentElement.setAttribute('data-theme', next ? 'dark' : '')
     localStorage.setItem('theme', next ? 'dark' : 'light')
+  }
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
   }
 
   return (
@@ -126,17 +135,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           className="px-3 py-4 flex items-center justify-between"
           style={{ borderTop: '1px solid var(--border)' }}
         >
-          <div className="flex items-center gap-2">
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
-              style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}
-            >
-              U
-            </div>
-            <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
-              Minha conta
-            </span>
-          </div>
+          <button className="sidebar-item flex-1" onClick={handleLogout} style={{ color: 'var(--text-muted)' }}>
+            <LogOut size={16} />
+            <span>Sair</span>
+          </button>
           <button className="btn btn-ghost p-1.5" onClick={toggleTheme} title="Alternar tema">
             {dark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
