@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { TrendingUp } from 'lucide-react'
@@ -15,6 +15,15 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
+
+  // If already logged in, redirect to dashboard
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        window.location.href = '/dashboard'
+      }
+    })
+  }, [supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

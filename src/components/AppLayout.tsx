@@ -30,6 +30,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [dark, setDark] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('theme')
@@ -37,6 +38,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       setDark(true)
       document.documentElement.setAttribute('data-theme', 'dark')
     }
+  }, [])
+
+  // Check auth on mount
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        window.location.href = '/login'
+      } else {
+        setAuthChecked(true)
+      }
+    })
   }, [])
 
   const toggleTheme = () => {
@@ -49,9 +62,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+    window.location.href = '/login'
   }
+
+  // Show loading while checking auth
+  if (!authChecked) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg-base)',
+        color: 'var(--text-muted)',
+        fontSize: '0.875rem',
+      }}>
+        Carregando...
+      </div>
+    )
+  }
+
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>
