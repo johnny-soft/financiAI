@@ -41,3 +41,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { id, name, icon, color, type } = await req.json()
+    if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
+
+    const { data, error } = await supabase.from('categories')
+      .update({ name, icon, color, type })
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return NextResponse.json({ data })
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const id = new URL(req.url).searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
+
+    const { error } = await supabase.from('categories')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .eq('is_default', false) // Prevent deleting default categories
+
+    if (error) throw error
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}

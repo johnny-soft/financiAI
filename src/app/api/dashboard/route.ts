@@ -42,11 +42,6 @@ export async function GET() {
     const accounts = accountsRes.data ?? []
     const monthTx = monthTxRes.data ?? []
 
-    // Separate accounts by type
-    const creditCardAccountIds = new Set(
-      accounts.filter(a => a.type === 'credit').map(a => a.id)
-    )
-
     // Total Balance = only non-credit-card accounts (checking, savings, investment, wallet)
     const totalBalance = accounts
       .filter(a => a.type !== 'credit')
@@ -57,15 +52,13 @@ export async function GET() {
       .filter(a => a.type === 'credit')
       .reduce((a, acc) => a + parseFloat(String(acc.balance ?? 0)), 0)
 
-    // For income/expense calculation, exclude credit card transactions
-    // to avoid double-counting (card purchases + card bill payment from checking)
-    // We count only checking/savings/wallet transactions as the "real" cash flow
-    const cashFlowTx = monthTx.filter(t => !creditCardAccountIds.has(t.account_id))
-
-    const monthIncome = cashFlowTx
+    // Include ALL transactions for income/expense — credit card transactions
+    // are the real purchases. The card bill payment from checking will show
+    // as an expense too, but that's more reliable than showing nothing.
+    const monthIncome = monthTx
       .filter((t) => t.type === 'income')
       .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
-    const monthExpense = cashFlowTx
+    const monthExpense = monthTx
       .filter((t) => t.type === 'expense')
       .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
 
