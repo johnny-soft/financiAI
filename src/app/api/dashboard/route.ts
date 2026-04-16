@@ -2,6 +2,35 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentMonthRange } from '@/lib/utils'
 
+/**
+ * Calculate billing cycle dates based on closing day.
+ * Example: closing_day=15, today=April 16 → bill period: Mar 16 → Apr 15
+ * Example: closing_day=15, today=April 10 → bill period: Mar 16 → Apr 15
+ */
+function getBillingPeriod(closingDay: number): { start: string; end: string } {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() // 0-indexed
+
+  let billEnd: Date
+  let billStart: Date
+
+  if (now.getDate() > closingDay) {
+    // Bill already closed this month → current bill is: closing+1 this month → closing next month
+    billStart = new Date(year, month, closingDay + 1)
+    billEnd = new Date(year, month + 1, closingDay)
+  } else {
+    // Bill hasn't closed yet → current bill is: closing+1 last month → closing this month
+    billStart = new Date(year, month - 1, closingDay + 1)
+    billEnd = new Date(year, month, closingDay)
+  }
+
+  return {
+    start: billStart.toISOString().split('T')[0],
+    end: billEnd.toISOString().split('T')[0],
+  }
+}
+
 export async function GET() {
   try {
     const supabase = createClient()
@@ -14,7 +43,6 @@ export async function GET() {
     const [
       accountsRes,
       monthTxRes,
-      creditCardTxRes,
       recentTxRes,
       categoryRes,
       trendRes,
@@ -26,13 +54,6 @@ export async function GET() {
         .select('amount, type, account_id')
         .eq('user_id', user.id)
         .neq('type', 'transfer')
-        .gte('date', start)
-        .lte('date', end),
-      // Credit card expenses this month (for "Fatura Cartão" stat)
-      supabase.from('transactions')
-        .select('amount, account_id')
-        .eq('user_id', user.id)
-        .eq('type', 'expense')
         .gte('date', start)
         .lte('date', end),
       supabase.from('transactions')
@@ -52,30 +73,60 @@ export async function GET() {
 
     const accounts = accountsRes.data ?? []
     const monthTx = monthTxRes.data ?? []
-    const creditCardTx = creditCardTxRes.data ?? []
 
-    // Credit card account IDs
-    const creditCardAccountIds = new Set(
-      accounts.filter(a => a.type === 'credit').map(a => a.id)
-    )
+    // Credit card accounts
+    const creditCardAccounts = accounts.filter(a => a.type === 'credit')
+    const creditCardAccountIds = new Set(creditCardAccounts.map(a => a.id))
 
     // Total Balance = only non-credit-card accounts
     const totalBalance = accounts
       .filter(a => a.type !== 'credit')
       .reduce((a, acc) => a + parseFloat(String(acc.balance ?? 0)), 0)
 
-    // Credit Card bill THIS MONTH = sum of credit card expense transactions this month
-    // (not the total balance, which includes previous months' debt)
-    const monthCreditCardExpenses = creditCardTx
-      .filter(t => creditCardAccountIds.has(t.account_id))
-      .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+    // Credit Card bill = calculated using billing cycle dates (if configured)
+    let totalCreditDebt = 0
+
+    if (creditCardAccounts.length > 0) {
+      // Get the closing day from the first credit card (or use default)
+      const closingDay = creditCardAccounts[0].closing_day
+
+      if (closingDay) {
+        // Use billing cycle: from last closing+1 to this closing
+        const billing = getBillingPeriod(closingDay)
+
+        const { data: billTx } = await supabase
+          .from('transactions')
+          .select('amount')
+          .eq('user_id', user.id)
+          .eq('type', 'expense')
+          .in('account_id', creditCardAccounts.map(a => a.id))
+          .gte('date', billing.start)
+          .lte('date', billing.end)
+
+        totalCreditDebt = (billTx ?? [])
+          .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+      } else {
+        // No closing day configured → use current month as fallback
+        const { data: billTx } = await supabase
+          .from('transactions')
+          .select('amount')
+          .eq('user_id', user.id)
+          .eq('type', 'expense')
+          .in('account_id', creditCardAccounts.map(a => a.id))
+          .gte('date', start)
+          .lte('date', end)
+
+        totalCreditDebt = (billTx ?? [])
+          .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
+      }
+    }
 
     // Income = only from non-credit-card accounts (real income)
     const monthIncome = monthTx
       .filter((t) => t.type === 'income' && !creditCardAccountIds.has(t.account_id))
       .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
 
-    // Expenses = all expense transactions this month (includes credit card purchases)
+    // Expenses = all expense transactions this month
     const monthExpense = monthTx
       .filter((t) => t.type === 'expense')
       .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
@@ -85,7 +136,7 @@ export async function GET() {
     return NextResponse.json({
       data: {
         totalBalance,
-        totalCreditDebt: monthCreditCardExpenses,
+        totalCreditDebt,
         monthIncome,
         monthExpense,
         monthBalance: monthIncome - monthExpense,
