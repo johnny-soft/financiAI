@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import {
   getPluggyAccounts,
   getPluggyTransactions,
+  getPluggyItem,
   mapPluggyAccountType,
   mapPluggyTransaction,
 } from '@/lib/pluggy'
@@ -20,7 +21,10 @@ export async function POST() {
       .eq('id', user.id)
       .single()
 
-    if (profileError) throw profileError
+    if (profileError) {
+      console.error('Profile fetch error:', profileError)
+      return NextResponse.json({ error: `Erro ao buscar perfil: ${profileError.message}` }, { status: 500 })
+    }
 
     const itemIds: string[] = profile?.pluggy_item_ids ?? []
 
@@ -36,8 +40,20 @@ export async function POST() {
 
     for (const itemId of itemIds) {
       try {
+        // Fetch item info to get institution/connector name
+        let connectorName: string | null = null
+        let connectorLogo: string | null = null
+        try {
+          const item = await getPluggyItem(itemId)
+          connectorName = item.connector?.name ?? null
+          connectorLogo = item.connector?.imageUrl ?? null
+        } catch (itemInfoErr) {
+          console.error(`Failed to fetch item info for ${itemId}:`, itemInfoErr)
+        }
+
         // 1. Fetch accounts from Pluggy
         const pluggyAccounts = await getPluggyAccounts(itemId)
+        console.log(`Item ${itemId}: found ${pluggyAccounts.length} accounts`)
 
         for (const pAccount of pluggyAccounts) {
           try {
@@ -47,14 +63,16 @@ export async function POST() {
               pluggy_account_id: pAccount.id,
               pluggy_item_id: itemId,
               name: pAccount.name,
-              institution: pAccount.institution?.name || null,
-              institution_logo: pAccount.institution?.imageUrl || null,
-              type: mapPluggyAccountType(pAccount.type, pAccount.subtype),
+              institution: pAccount.institution?.name || connectorName || null,
+              institution_logo: pAccount.institution?.imageUrl || connectorLogo || null,
+              type: mapPluggyAccountType(pAccount.type, pAccount.subtype || ''),
               balance: pAccount.balance,
               currency: pAccount.currencyCode || 'BRL',
               is_active: true,
               last_synced_at: new Date().toISOString(),
             }
+
+            console.log(`Upserting account: ${pAccount.name} (${pAccount.id})`)
 
             // Try to find existing account by pluggy_account_id
             const { data: existingAccount } = await supabase
@@ -62,28 +80,32 @@ export async function POST() {
               .select('id')
               .eq('pluggy_account_id', pAccount.id)
               .eq('user_id', user.id)
-              .single()
+              .maybeSingle()
 
             let accountId: string
 
             if (existingAccount) {
-              // Update existing
               const { error: updateErr } = await supabase
                 .from('accounts')
                 .update(accountData)
                 .eq('id', existingAccount.id)
 
-              if (updateErr) throw updateErr
+              if (updateErr) {
+                console.error('Account update error:', updateErr)
+                throw updateErr
+              }
               accountId = existingAccount.id
             } else {
-              // Insert new
               const { data: newAccount, error: insertErr } = await supabase
                 .from('accounts')
                 .insert(accountData)
                 .select('id')
                 .single()
 
-              if (insertErr) throw insertErr
+              if (insertErr) {
+                console.error('Account insert error:', insertErr)
+                throw insertErr
+              }
               accountId = newAccount.id
             }
 
@@ -95,45 +117,65 @@ export async function POST() {
             const from = threeMonthsAgo.toISOString().split('T')[0]
 
             const pluggyTransactions = await getPluggyTransactions(pAccount.id, from)
+            console.log(`Account ${pAccount.name}: found ${pluggyTransactions.length} transactions`)
 
             // 4. Upsert transactions
             for (const pTx of pluggyTransactions) {
-              const txData = {
-                user_id: user.id,
-                account_id: accountId,
-                ...mapPluggyTransaction(pTx),
-              }
+              try {
+                const mapped = mapPluggyTransaction(pTx)
+                const txData = {
+                  user_id: user.id,
+                  account_id: accountId,
+                  pluggy_transaction_id: mapped.pluggy_transaction_id,
+                  description: mapped.description,
+                  amount: mapped.amount,
+                  type: mapped.type,
+                  date: mapped.date,
+                  payment_method: mapped.payment_method,
+                  source: mapped.source,
+                  metadata: JSON.stringify(mapped.metadata),
+                }
 
-              // Use pluggy_transaction_id to avoid duplicates
-              const { data: existingTx } = await supabase
-                .from('transactions')
-                .select('id')
-                .eq('pluggy_transaction_id', pTx.id)
-                .eq('user_id', user.id)
-                .single()
-
-              if (existingTx) {
-                // Update existing transaction
-                await supabase
+                // Use pluggy_transaction_id to avoid duplicates
+                const { data: existingTx } = await supabase
                   .from('transactions')
-                  .update(txData)
-                  .eq('id', existingTx.id)
-              } else {
-                // Insert new transaction
-                await supabase
-                  .from('transactions')
-                  .insert(txData)
-              }
+                  .select('id')
+                  .eq('pluggy_transaction_id', pTx.id)
+                  .eq('user_id', user.id)
+                  .maybeSingle()
 
-              totalTransactionsSynced++
+                if (existingTx) {
+                  await supabase
+                    .from('transactions')
+                    .update(txData)
+                    .eq('id', existingTx.id)
+                } else {
+                  const { error: txInsertErr } = await supabase
+                    .from('transactions')
+                    .insert(txData)
+
+                  if (txInsertErr) {
+                    console.error('Transaction insert error:', txInsertErr, txData)
+                    throw txInsertErr
+                  }
+                }
+
+                totalTransactionsSynced++
+              } catch (txErr) {
+                const msg = txErr instanceof Error ? txErr.message : 'Transaction sync error'
+                console.error(`Transaction ${pTx.id} error:`, txErr)
+                errors.push(`Transação "${pTx.description}": ${msg}`)
+              }
             }
           } catch (accErr) {
             const msg = accErr instanceof Error ? accErr.message : 'Account sync error'
+            console.error(`Account ${pAccount.name} error:`, accErr)
             errors.push(`Conta ${pAccount.name}: ${msg}`)
           }
         }
       } catch (itemErr) {
         const msg = itemErr instanceof Error ? itemErr.message : 'Item sync error'
+        console.error(`Item ${itemId} error:`, itemErr)
         errors.push(`Item ${itemId}: ${msg}`)
       }
     }
@@ -146,6 +188,8 @@ export async function POST() {
         status: errors.length > 0 ? 'partial' : 'success',
         transactions_synced: totalTransactionsSynced,
         error_message: errors.length > 0 ? errors.join('; ') : null,
+      }).then(({ error }) => {
+        if (error) console.error('Sync log insert error:', error)
       })
     }
 
