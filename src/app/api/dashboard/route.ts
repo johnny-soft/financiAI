@@ -3,12 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentMonthRange } from '@/lib/utils'
 
 /**
- * Calculate the LAST CLOSED billing cycle dates.
- * This is the bill the user sees in their bank app (the one they need to pay).
+ * Calculate the CURRENT billing cycle dates.
+ * This is the bill the user sees in their bank app as "fatura atual".
  *
- * Example: closing_day=15
- *   today=Apr 16 → last closed bill: Mar 16 → Apr 15 ✓
- *   today=Apr 10 → last closed bill: Feb 16 → Mar 15 ✓
+ * Example: closing_day=26
+ *   today=Apr 16 (before closing) → current bill: Mar 27 → Apr 26
+ *   today=Apr 28 (after closing)  → current bill: Apr 27 → May 26
  */
 function getBillingPeriod(closingDay: number): { start: string; end: string } {
   const now = new Date()
@@ -19,13 +19,13 @@ function getBillingPeriod(closingDay: number): { start: string; end: string } {
   let billStart: Date
 
   if (now.getDate() > closingDay) {
-    // Bill closed this month → last closed bill: prev month closing+1 → this month closing
+    // Bill already closed this month → new cycle started
+    billStart = new Date(year, month, closingDay + 1)
+    billEnd = new Date(year, month + 1, closingDay)
+  } else {
+    // Bill hasn't closed yet → still in current cycle
     billStart = new Date(year, month - 1, closingDay + 1)
     billEnd = new Date(year, month, closingDay)
-  } else {
-    // Bill hasn't closed yet → last closed bill: 2 months ago closing+1 → last month closing
-    billStart = new Date(year, month - 2, closingDay + 1)
-    billEnd = new Date(year, month - 1, closingDay)
   }
 
   return {
