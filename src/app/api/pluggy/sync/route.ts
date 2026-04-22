@@ -9,7 +9,7 @@ import {
   PLUGGY_CATEGORY_MAP,
 } from '@/lib/pluggy'
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -18,7 +18,7 @@ export async function POST() {
     // Get user's connected Pluggy item IDs
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('pluggy_item_ids')
+      .select('pluggy_item_ids, ai_auto_categorization')
       .eq('id', user.id)
       .single()
 
@@ -217,6 +217,22 @@ export async function POST() {
       }).then(({ error }) => {
         if (error) console.error('Sync log insert error:', error)
       })
+    }
+
+    // 6. Trigger AI Auto-categorization if enabled
+    if (profile?.ai_auto_categorization && totalTransactionsSynced > 0) {
+      try {
+        const categorizeUrl = new URL('/api/transactions/categorize-ai', req.url)
+        // Fire and forget or await
+        await fetch(categorizeUrl.toString(), { 
+          method: 'POST',
+          headers: {
+            cookie: req.headers.get('cookie') || ''
+          }
+        })
+      } catch (categorizeErr) {
+        console.error('Failed to trigger AI categorization:', categorizeErr)
+      }
     }
 
     return NextResponse.json({

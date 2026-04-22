@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Filter, ArrowUpRight, ArrowDownRight, Pencil, Trash2, X } from 'lucide-react'
+import { Plus, Search, Filter, ArrowUpRight, ArrowDownRight, Pencil, Trash2, X, Sparkles, Loader2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { formatCurrency, formatDate, PAYMENT_METHOD_LABELS } from '@/lib/utils'
 import type { Transaction, Category, Account } from '@/types'
 import TransactionModal from '@/components/transactions/TransactionModal'
@@ -17,6 +18,7 @@ export default function TransactionsPage() {
   const [showModal, setShowModal] = useState(false)
   const [editTx, setEditTx] = useState<Transaction | null>(null)
   const [page, setPage] = useState(1)
+  const [categorizing, setCategorizing] = useState(false)
   const PER_PAGE = 20
 
   const load = useCallback(async () => {
@@ -48,6 +50,25 @@ export default function TransactionsPage() {
     load()
   }
 
+  const handleAutoCategorize = async () => {
+    setCategorizing(true)
+    try {
+      const res = await fetch('/api/transactions/categorize-ai', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro na API')
+      if (data.categorizedCount > 0) {
+        toast.success(`${data.categorizedCount} transações categorizadas automaticamente!`)
+        load()
+      } else {
+        toast.error(data.message || 'Nenhuma transação pendente foi classificada.')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao classificar')
+    } finally {
+      setCategorizing(false)
+    }
+  }
+
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0)
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0)
 
@@ -63,9 +84,20 @@ export default function TransactionsPage() {
               {' '}· Gastos: <span className="expense-text font-medium">{formatCurrency(totalExpense)}</span>
             </p>
           </div>
-          <button className="btn btn-primary" onClick={() => { setEditTx(null); setShowModal(true) }}>
-            <Plus size={16} /> Nova transação
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="btn btn-secondary"
+              onClick={handleAutoCategorize}
+              disabled={categorizing}
+              title="Classificar itens sem categoria com IA"
+            >
+              {categorizing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} style={{ color: 'var(--accent)' }} />}
+              Auto-categorizar
+            </button>
+            <button className="btn btn-primary" onClick={() => { setEditTx(null); setShowModal(true) }}>
+              <Plus size={16} /> Nova transação
+            </button>
+          </div>
         </div>
 
         {/* Filters */}

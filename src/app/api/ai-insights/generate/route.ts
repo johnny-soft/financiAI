@@ -67,17 +67,22 @@ export async function POST() {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-6',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 1500,
-        system: `Você é um consultor financeiro pessoal especializado em finanças pessoais no Brasil.
-Analise os dados financeiros fornecidos e gere exatamente 4 insights práticos e personalizados.
-Responda APENAS com um JSON válido, sem markdown, no seguinte formato:
+        system: `Você é um consultor financeiro pessoal avançado, especializado em otimização de renda, economia e investimentos no Brasil.
+Analise os dados financeiros fornecidos e gere exatamente 4 insights práticos e altamente personalizados.
+
+DIRETRIZES FUNDAMENTAIS:
+1. Foque ativamente em identificar gastos supérfluos e padrões de consumo onde o usuário pode cortar despesas (tipo "saving").
+2. Analise a "taxa_poupanca_pct" e o saldo. Se o usuário tiver saldo sobrando, sugira detalhadamente como direcionar isso para investimentos (reserva de emergência, Tesouro Direto, CDBs de liquidez diária, etc) (tipo "general" ou "goal").
+3. Alerte sobre riscos se os gastos ultrapassarem as receitas ou houver muito peso em um tipo de gasto (tipo "alert").
+4. Responda ESTRITAMENTE com um JSON puro (sem marcações markdown como \`\`\`json), no exato formato:
 {
   "insights": [
     {
       "type": "saving|spending|goal|alert|general",
-      "title": "Título curto e direto (máx 60 chars)",
-      "content": "Explicação prática e acionável em português (2-3 frases)",
+      "title": "Título direto (máx 60 chars)",
+      "content": "Sua dica aplicável, direta e financeira aqui (2-3 frases).",
       "priority": "high|medium|low"
     }
   ]
@@ -113,7 +118,7 @@ Responda APENAS com um JSON válido, sem markdown, no seguinte formato:
       title: ins.title,
       content: ins.content,
       priority: ins.priority || 'medium',
-      metadata: { source: 'anthropic', model: 'claude-opus-4-6' },
+      metadata: { source: 'anthropic', model: 'claude-3-5-sonnet-20240620' },
     }))
 
     const { error: insertError } = await supabase.from('ai_insights').insert(insightsToInsert)

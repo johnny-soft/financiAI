@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Settings, CreditCard, Save, User, Moon, Sun } from 'lucide-react'
+import { Settings, CreditCard, Save, User, Sparkles } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 
@@ -9,6 +9,7 @@ interface Profile {
   full_name: string
   monthly_income: number
   currency: string
+  ai_auto_categorization?: boolean
 }
 
 interface BankAccount {
@@ -21,7 +22,7 @@ interface BankAccount {
 }
 
 export default function SettingsPage() {
-  const [profile, setProfile] = useState<Profile>({ full_name: '', monthly_income: 0, currency: 'BRL' })
+  const [profile, setProfile] = useState<Profile>({ full_name: '', monthly_income: 0, currency: 'BRL', ai_auto_categorization: false })
   const [creditCards, setCreditCards] = useState<BankAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -32,7 +33,7 @@ export default function SettingsPage() {
     if (!user) return
 
     const [profileRes, accountsRes] = await Promise.all([
-      supabase.from('profiles').select('full_name, monthly_income, currency').eq('id', user.id).single(),
+      supabase.from('profiles').select('full_name, monthly_income, currency, ai_auto_categorization').eq('id', user.id).single(),
       supabase.from('accounts').select('id, name, institution, type, closing_day, due_day').eq('user_id', user.id).eq('is_active', true),
     ])
 
@@ -41,6 +42,7 @@ export default function SettingsPage() {
         full_name: profileRes.data.full_name || '',
         monthly_income: parseFloat(String(profileRes.data.monthly_income)) || 0,
         currency: profileRes.data.currency || 'BRL',
+        ai_auto_categorization: profileRes.data.ai_auto_categorization ?? false,
       })
     }
 
@@ -68,6 +70,7 @@ export default function SettingsPage() {
       full_name: profile.full_name,
       monthly_income: profile.monthly_income,
       currency: profile.currency,
+      ai_auto_categorization: profile.ai_auto_categorization,
     }).eq('id', user.id)
 
     if (error) {
@@ -159,6 +162,38 @@ export default function SettingsPage() {
             <Save size={14} />
             {saving ? 'Salvando...' : 'Salvar perfil'}
           </button>
+        </div>
+      </div>
+
+      {/* AI Settings Section */}
+      <div className="card" style={{ padding: '1.25rem' }}>
+        <h2 style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Sparkles size={16} style={{ color: 'var(--accent)' }} />
+          Inteligência Artificial
+        </h2>
+        
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontWeight: 500, fontSize: '0.875rem' }}>Auto-categorizar novas transações</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 4, lineHeight: 1.5 }}>
+              Quando ativado, a IA classificará automaticamente as transações importadas caso o nosso banco de palavras-chave locais não encontre uma categoria clara equivalente.
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer" style={{ marginTop: 2 }}>
+            <input 
+              type="checkbox" 
+              className="sr-only peer" 
+              checked={profile.ai_auto_categorization}
+              onChange={e => {
+                setProfile(p => ({ ...p, ai_auto_categorization: e.target.checked }));
+                // O "Salvar Perfil" aplicará essa mudança também!
+              }}
+            />
+            <div 
+              className="w-11 h-6 bg-[var(--bg-subtle)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"
+              style={{ background: profile.ai_auto_categorization ? 'var(--accent)' : 'var(--border-subtle)' }}
+            ></div>
+          </label>
         </div>
       </div>
 
