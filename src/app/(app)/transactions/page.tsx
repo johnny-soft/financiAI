@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Filter, ArrowUpRight, ArrowDownRight, Pencil, Trash2, X } from 'lucide-react'
+import { Plus, Search, Filter, ArrowUpRight, ArrowDownRight, Pencil, Trash2, X, Sparkles, Loader2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { formatCurrency, formatDate, PAYMENT_METHOD_LABELS } from '@/lib/utils'
 import type { Transaction, Category, Account } from '@/types'
 import TransactionModal from '@/components/transactions/TransactionModal'
-import AppLayout from '@/components/AppLayout'
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -18,6 +18,7 @@ export default function TransactionsPage() {
   const [showModal, setShowModal] = useState(false)
   const [editTx, setEditTx] = useState<Transaction | null>(null)
   const [page, setPage] = useState(1)
+  const [categorizing, setCategorizing] = useState(false)
   const PER_PAGE = 20
 
   const load = useCallback(async () => {
@@ -49,11 +50,30 @@ export default function TransactionsPage() {
     load()
   }
 
+  const handleAutoCategorize = async () => {
+    setCategorizing(true)
+    try {
+      const res = await fetch('/api/transactions/categorize-ai', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro na API')
+      if (data.categorizedCount > 0) {
+        toast.success(`${data.categorizedCount} transações categorizadas automaticamente!`)
+        load()
+      } else {
+        toast.error(data.message || 'Nenhuma transação pendente foi classificada.')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao classificar')
+    } finally {
+      setCategorizing(false)
+    }
+  }
+
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0)
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0)
 
   return (
-    <AppLayout>
+    <>
       <div className="animate-fade-in space-y-5">
         {/* Header */}
         <div className="page-header">
@@ -64,9 +84,17 @@ export default function TransactionsPage() {
               {' '}· Gastos: <span className="expense-text font-medium">{formatCurrency(totalExpense)}</span>
             </p>
           </div>
-          <button className="btn btn-primary" onClick={() => { setEditTx(null); setShowModal(true) }}>
-            <Plus size={16} /> Nova transação
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="btn btn-secondary"
+              onClick={handleAutoCategorize}
+              disabled={categorizing}
+              title="Classificar itens sem categoria com IA"
+            >
+              {categorizing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} style={{ color: 'var(--accent)' }} />}
+              Auto-categorizar
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -151,7 +179,7 @@ export default function TransactionsPage() {
               <table className="w-full hidden lg:table">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['Descrição', 'Categoria', 'Conta', 'Data', 'Método', 'Valor', ''].map(h => (
+                    {['Descrição', 'Categoria', 'Conta', 'Data', 'Método', 'Valor'].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         {h}
                       </th>
@@ -162,9 +190,10 @@ export default function TransactionsPage() {
                   {transactions.map(tx => (
                     <tr
                       key={tx.id}
-                      style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.1s' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '')}
+                      className="cursor-pointer transition-colors hover:bg-gray-50/5 active:bg-gray-50/10"
+                      style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                      onClick={() => { setEditTx(tx); setShowModal(true) }}
+                      title="Clique para categorizar"
                     >
                       <td style={{ padding: '12px 16px' }}>
                         <div className="flex items-center gap-2.5">
@@ -203,16 +232,6 @@ export default function TransactionsPage() {
                           </span>
                         </div>
                       </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100" style={{ transition: 'opacity 0.15s' }}>
-                          <button className="btn btn-ghost p-1.5" onClick={() => { setEditTx(tx); setShowModal(true) }}>
-                            <Pencil size={14} />
-                          </button>
-                          <button className="btn btn-ghost p-1.5" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(tx.id)}>
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -221,7 +240,7 @@ export default function TransactionsPage() {
               {/* Mobile list */}
               <div className="lg:hidden divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
                 {transactions.map(tx => (
-                  <div key={tx.id} className="p-4 flex items-center gap-3">
+                  <div key={tx.id} className="p-4 flex items-center gap-3 cursor-pointer hover:opacity-80 active:opacity-60 transition-opacity" onClick={() => { setEditTx(tx); setShowModal(true) }}>
                     <div className="w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0"
                       style={{ background: tx.type === 'income' ? 'color-mix(in srgb, var(--success) 12%, transparent)' : 'color-mix(in srgb, var(--danger) 10%, transparent)' }}>
                       {tx.category?.icon ?? '💰'}
@@ -264,6 +283,6 @@ export default function TransactionsPage() {
           onSave={load}
         />
       )}
-    </AppLayout>
+    </>
   )
 }

@@ -5,7 +5,6 @@ import { Plus, Target, Pencil, Trash2, PlusCircle, X, Loader2 } from 'lucide-rea
 import toast from 'react-hot-toast'
 import { formatCurrency, formatDate, percentageOf, GOAL_CATEGORY_LABELS } from '@/lib/utils'
 import type { Goal } from '@/types'
-import AppLayout from '@/components/AppLayout'
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
@@ -34,7 +33,7 @@ export default function GoalsPage() {
   const completedGoals = goals.filter(g => g.status === 'completed')
 
   return (
-    <AppLayout>
+    <>
       <div className="animate-fade-in space-y-6">
         <div className="page-header">
           <div>
@@ -116,7 +115,7 @@ export default function GoalsPage() {
           onSave={load}
         />
       )}
-    </AppLayout>
+    </>
   )
 }
 

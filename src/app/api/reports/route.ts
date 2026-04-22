@@ -1,22 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const months = Number(req.nextUrl.searchParams.get('months') ?? 6)
+    const range = req.nextUrl.searchParams.get('range') ?? '6m'
+    const isDays = range.endsWith('d')
+    const value = parseInt(range.replace(/[^\d]/g, '')) || 6
 
-    const startDate = new Date()
-    startDate.setMonth(startDate.getMonth() - months + 1)
-    startDate.setDate(1)
+    let startDate = new Date()
+    if (isDays) {
+      startDate.setDate(startDate.getDate() - value + 1)
+    } else {
+      startDate.setMonth(startDate.getMonth() - value + 1)
+      startDate.setDate(1)
+    }
+    
     const start = startDate.toISOString().split('T')[0]
     const end = new Date().toISOString().split('T')[0]
 
+    const trendMonthsToRequest = isDays ? 1 : value
+
     const [trendRes, categoryRes] = await Promise.all([
-      supabase.rpc('get_monthly_balance', { p_user_id: user.id, p_months: months }),
+      supabase.rpc('get_monthly_balance', { p_user_id: user.id, p_months: trendMonthsToRequest }),
       supabase.rpc('get_spending_by_category', { p_user_id: user.id, p_start: start, p_end: end }),
     ])
 

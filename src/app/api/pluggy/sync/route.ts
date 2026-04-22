@@ -9,7 +9,7 @@ import {
   PLUGGY_CATEGORY_MAP,
 } from '@/lib/pluggy'
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -18,7 +18,7 @@ export async function POST() {
     // Get user's connected Pluggy item IDs
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('pluggy_item_ids')
+      .select('pluggy_item_ids, ai_auto_categorization')
       .eq('id', user.id)
       .single()
 
@@ -125,9 +125,10 @@ export async function POST() {
             totalAccountsSynced++
 
             // 3. Fetch transactions from Pluggy for this account
-            const twelveMonthsAgo = new Date()
-            twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
-            const from = twelveMonthsAgo.toISOString().split('T')[0]
+            const fromDate = new Date()
+            const syncMonths = existingAccount ? 3 : 12
+            fromDate.setMonth(fromDate.getMonth() - syncMonths)
+            const from = fromDate.toISOString().split('T')[0]
 
             const pluggyTransactions = await getPluggyTransactions(pAccount.id, from)
             console.log(`Account ${pAccount.name}: found ${pluggyTransactions.length} transactions`)
@@ -217,6 +218,22 @@ export async function POST() {
       }).then(({ error }) => {
         if (error) console.error('Sync log insert error:', error)
       })
+    }
+
+    // 6. Trigger AI Auto-categorization if enabled
+    if (profile?.ai_auto_categorization && totalTransactionsSynced > 0) {
+      try {
+        const categorizeUrl = new URL('/api/transactions/categorize-ai', req.url)
+        // Fire and forget or await
+        await fetch(categorizeUrl.toString(), { 
+          method: 'POST',
+          headers: {
+            cookie: req.headers.get('cookie') || ''
+          }
+        })
+      } catch (categorizeErr) {
+        console.error('Failed to trigger AI categorization:', categorizeErr)
+      }
     }
 
     return NextResponse.json({

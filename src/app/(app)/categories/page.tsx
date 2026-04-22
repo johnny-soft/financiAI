@@ -253,24 +253,26 @@ function CategoryCard({
           </p>
         </div>
       </div>
-      {!cat.is_default && (
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            className="btn btn-ghost"
-            onClick={() => onEdit(cat)}
-            style={{ padding: 6 }}
-          >
-            <Pencil size={14} />
-          </button>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button
+          className="btn btn-ghost"
+          onClick={() => onEdit(cat)}
+          style={{ padding: 6 }}
+          title="Editar categoria"
+        >
+          <Pencil size={14} />
+        </button>
+        {!cat.is_default && (
           <button
             className="btn btn-ghost"
             onClick={() => onDelete(cat.id)}
             style={{ padding: 6, color: 'var(--danger)' }}
+            title="Excluir categoria"
           >
             <Trash2 size={14} />
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

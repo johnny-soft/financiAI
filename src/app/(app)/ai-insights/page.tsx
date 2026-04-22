@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Sparkles, RefreshCw, CheckCheck, X, TrendingUp, AlertTriangle, PiggyBank, Lightbulb, Loader2 } from 'lucide-react'
+import { Sparkles, RefreshCw, CheckCheck, X, TrendingUp, AlertTriangle, PiggyBank, Lightbulb, Loader2, Settings2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { createClient } from '@/lib/supabase/client'
 import type { AIInsight } from '@/types'
-import AppLayout from '@/components/AppLayout'
 import { formatDate } from '@/lib/utils'
 
 const INSIGHT_ICONS: Record<string, React.ReactNode> = {
@@ -33,6 +33,9 @@ export default function AIInsightsPage() {
   const [insights, setInsights] = useState<AIInsight[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('')
+  const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([])
+  const supabase = createClient()
 
   const load = async () => {
     setLoading(true)
@@ -41,17 +44,44 @@ export default function AIInsightsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { 
+    load() 
+
+    // Fetch models and prepopulate fallback if needed
+    fetch('/api/ai-insights/models').then(r => r.json()).then(ms => {
+      if (ms.data && ms.data.length > 0) setAvailableModels(ms.data)
+    }).catch(e => console.warn('Falhar ao carregar models:', e))
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase.from('profiles').select('ai_model').eq('id', user.id).single()
+          .then(({ data }) => {
+            if(data?.ai_model) setSelectedModel(data.ai_model)
+          })
+      }
+    })
+  }, [supabase])
+
+  const handleUpdateModel = async (newModel: string) => {
+    setSelectedModel(newModel)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await supabase.from('profiles').update({ ai_model: newModel }).eq('id', user.id)
+    }
+  }
 
   const handleGenerate = async () => {
     setGenerating(true)
     try {
       const res = await fetch('/api/ai-insights/generate', { method: 'POST' })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        throw new Error(payload.error || 'Erro interno na comunicação com o servidor.')
+      }
       toast.success('Novos insights gerados!')
       load()
-    } catch {
-      toast.error('Erro ao gerar insights. Verifique se a API de IA está configurada.')
+    } catch (err: any) {
+      toast.error(err.message || 'Falha ao gerar insights.')
     } finally {
       setGenerating(false)
     }
@@ -71,7 +101,7 @@ export default function AIInsightsPage() {
   const unread = activeInsights.filter(i => !i.is_read)
 
   return (
-    <AppLayout>
+    <>
       <div className="animate-fade-in space-y-6">
         {/* Header */}
         <div className="page-header">
@@ -82,14 +112,42 @@ export default function AIInsightsPage() {
               {unread.length > 0 && <span className="ml-2 badge income-badge">{unread.length} nova{unread.length > 1 ? 's' : ''}</span>}
             </p>
           </div>
-          <button
-            className="btn btn-primary"
-            onClick={handleGenerate}
-            disabled={generating}
-          >
-            {generating ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-            {generating ? 'Analisando…' : 'Gerar insights'}
-          </button>
+          <div className="flex items-center gap-3 mt-4 sm:mt-0">
+            <div className="relative">
+              <select 
+                value={selectedModel}
+                onChange={e => handleUpdateModel(e.target.value)}
+                disabled={generating}
+                className="appearance-none bg-transparent border py-2 pl-3 pr-8 rounded-lg outline-none text-sm font-medium transition-colors"
+                style={{
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-primary)',
+                  background: 'var(--bg-subtle)'
+                }}
+              >
+                <option value="" disabled>Selecionar...</option>
+                {availableModels.length > 0 ? (
+                  availableModels.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))
+                ) : (
+                  <option value="loading">Carregando...</option>
+                )}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                <Settings2 size={14} />
+              </div>
+            </div>
+
+            <button
+              className="btn btn-primary"
+              onClick={handleGenerate}
+              disabled={generating}
+            >
+              {generating ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              {generating ? 'Analisando…' : 'Gerar insights'}
+            </button>
+          </div>
         </div>
 
         {/* Info banner */}
@@ -129,15 +187,18 @@ export default function AIInsightsPage() {
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-8 mt-2">
             {/* High priority first */}
             {(['high', 'medium', 'low'] as const).map(priority => {
               const group = activeInsights.filter(i => i.priority === priority)
               if (group.length === 0) return null
               return (
-                <div key={priority}>
-                  <p className="section-title">{PRIORITY_LABELS[priority]}</p>
-                  <div className="space-y-3">
+                <div key={priority} className="animate-fade-in-up">
+                  <div className="flex items-center gap-2 mb-4">
+                    <p className="section-title" style={{ margin: 0 }}>{PRIORITY_LABELS[priority]}</p>
+                    <span className="badge" style={{ background: 'var(--bg-subtle)', color: 'var(--text-muted)' }}>{group.length}</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                     {group.map(insight => (
                       <InsightCard
                         key={insight.id}
@@ -153,7 +214,7 @@ export default function AIInsightsPage() {
           </div>
         )}
       </div>
-    </AppLayout>
+    </>
   )
 }
 
@@ -162,52 +223,81 @@ function InsightCard({ insight, onDismiss, onRead }: {
   onDismiss: () => void
   onRead: () => void
 }) {
-  const color = INSIGHT_COLORS[insight.type]
-  const icon = INSIGHT_ICONS[insight.type]
+  const color = INSIGHT_COLORS[insight.type] || 'var(--accent)'
+  const icon = INSIGHT_ICONS[insight.type] || <Sparkles size={20} />
 
   return (
     <div
-      className="card-elevated p-5 transition-all"
+      className="card-elevated p-6 transition-all duration-300 group hover:-translate-y-1 relative overflow-hidden flex flex-col h-full"
       style={{
-        opacity: insight.is_read ? 0.75 : 1,
-        borderLeft: `3px solid ${color}`,
+        opacity: insight.is_read ? 0.65 : 1,
+        border: '1px solid var(--border-subtle)',
+        background: 'var(--bg-card)',
+        cursor: !insight.is_read ? 'pointer' : 'default',
+        boxShadow: insight.is_read ? '0 2px 8px rgba(0,0,0,0.02)' : `0 8px 30px -8px color-mix(in srgb, ${color} 25%, transparent)`,
       }}
       onClick={!insight.is_read ? onRead : undefined}
     >
-      <div className="flex items-start gap-3">
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-          style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}
-        >
-          {icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <p style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{insight.title}</p>
-            <div className="flex items-center gap-1 flex-shrink-0">
-              {!insight.is_read && (
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
-              )}
-              <button className="btn btn-ghost p-1" style={{ color: 'var(--text-muted)' }} onClick={(e) => { e.stopPropagation(); onDismiss() }}>
-                <X size={13} />
-              </button>
-            </div>
+      {/* Decorative Side Bar */}
+      <div 
+        className="absolute top-0 left-0 w-1 h-full transition-opacity duration-300" 
+        style={{ background: color, opacity: insight.is_read ? 0.3 : 1 }} 
+      />
+      
+      {/* Glow Effect for Unread */}
+      {!insight.is_read && (
+        <div 
+          className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-[0.15] pointer-events-none transition-opacity group-hover:opacity-25" 
+          style={{ background: color }} 
+        />
+      )}
+
+      <div className="flex flex-col h-full pl-2">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+            style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}
+          >
+            {icon}
           </div>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.65 }}>
-            {insight.content}
-          </p>
-          <div className="flex items-center gap-3 mt-3">
-            <span className="badge" style={{ background: `color-mix(in srgb, ${color} 10%, transparent)`, color, fontSize: '0.72rem' }}>
-              {insight.type === 'saving' ? 'Economia' : insight.type === 'spending' ? 'Gastos' : insight.type === 'goal' ? 'Meta' : insight.type === 'alert' ? 'Alerta' : 'Geral'}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {!insight.is_read ? (
+              <span className="badge animate-pulse" style={{ background: color, color: '#fff', fontSize: '0.65rem', padding: '3px 8px', letterSpacing: '0.02em' }}>NOVO</span>
+            ) : null}
+            <button 
+              className="btn btn-ghost p-1.5 opacity-0 group-hover:opacity-100 transition-opacity" 
+              style={{ color: 'var(--text-muted)' }} 
+              onClick={(e) => { e.stopPropagation(); onDismiss() }}
+              title="Ocultar dica"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+        
+        <p style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)', marginBottom: '0.5rem', lineHeight: 1.4, letterSpacing: '-0.01em' }}>
+          {insight.title}
+        </p>
+        
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6, flexGrow: 1, marginBottom: '1.25rem' }}>
+          {insight.content}
+        </p>
+        
+        <div className="flex items-center justify-between mt-auto pt-4 border-t border-dashed" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="flex items-center gap-2">
+            <span className="badge" style={{ background: `color-mix(in srgb, ${color} 6%, transparent)`, color, border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`, fontWeight: 600 }}>
+              {insight.type === 'saving' ? 'Economia' : insight.type === 'spending' ? 'Alerta de Consumo' : insight.type === 'goal' ? 'Meta Financeira' : insight.type === 'alert' ? 'Atenção Necessária' : 'Visão Geral'}
             </span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {formatDate(insight.generated_at, 'dd/MM/yyyy')}
-            </span>
-            {insight.is_read && (
-              <span className="flex items-center gap-1" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                <CheckCheck size={12} /> Lido
+          </div>
+          <div className="flex items-center gap-2">
+             {insight.is_read && (
+              <span title="Marcado como lido" style={{ color: 'var(--success)' }}>
+                <CheckCheck size={15} />
               </span>
             )}
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              {formatDate(insight.generated_at, 'dd/MM/yyyy')}
+            </span>
           </div>
         </div>
       </div>

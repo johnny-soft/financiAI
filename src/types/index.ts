@@ -17,6 +17,8 @@ export interface Profile {
   monthly_income: number
   currency: string
   pluggy_item_ids: string[]
+  ai_auto_categorization?: boolean
+  ai_model?: string
   created_at: string
   updated_at: string
 }
