@@ -94,9 +94,6 @@ export default function TransactionsPage() {
               {categorizing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} style={{ color: 'var(--accent)' }} />}
               Auto-categorizar
             </button>
-            <button className="btn btn-primary" onClick={() => { setEditTx(null); setShowModal(true) }}>
-              <Plus size={16} /> Nova transação
-            </button>
           </div>
         </div>
 
@@ -182,7 +179,7 @@ export default function TransactionsPage() {
               <table className="w-full hidden lg:table">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['Descrição', 'Categoria', 'Conta', 'Data', 'Método', 'Valor', ''].map(h => (
+                    {['Descrição', 'Categoria', 'Conta', 'Data', 'Método', 'Valor'].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         {h}
                       </th>
@@ -193,9 +190,10 @@ export default function TransactionsPage() {
                   {transactions.map(tx => (
                     <tr
                       key={tx.id}
-                      style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.1s' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '')}
+                      className="cursor-pointer transition-colors hover:bg-gray-50/5 active:bg-gray-50/10"
+                      style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                      onClick={() => { setEditTx(tx); setShowModal(true) }}
+                      title="Clique para categorizar"
                     >
                       <td style={{ padding: '12px 16px' }}>
                         <div className="flex items-center gap-2.5">
@@ -232,16 +230,6 @@ export default function TransactionsPage() {
                           }}>
                             {formatCurrency(tx.amount)}
                           </span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100" style={{ transition: 'opacity 0.15s' }}>
-                          <button className="btn btn-ghost p-1.5" onClick={() => { setEditTx(tx); setShowModal(true) }}>
-                            <Pencil size={14} />
-                          </button>
-                          <button className="btn btn-ghost p-1.5" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(tx.id)}>
-                            <Trash2 size={14} />
-                          </button>
                         </div>
                       </td>
                     </tr>

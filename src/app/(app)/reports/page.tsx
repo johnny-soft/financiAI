@@ -30,7 +30,7 @@ export default function ReportsPage() {
       .then(r => r.json())
       .then(d => { setData(d.data); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [months])
+  }, [range])
 
   const now = new Date()
 
