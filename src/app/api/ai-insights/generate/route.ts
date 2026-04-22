@@ -78,7 +78,7 @@ DIRETRIZES FUNDAMENTAIS:
   ]
 }`
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -99,7 +99,11 @@ DIRETRIZES FUNDAMENTAIS:
     if (!response.ok) {
       const err = await response.text()
       console.error('Gemini error:', err)
-      return NextResponse.json({ error: 'AI API error' }, { status: 500 })
+      let customError = 'Falha ao se comunicar com a Inteligência Artificial.'
+      if (response.status === 401 || response.status === 403) customError = 'Chave de API inválida (GEMINI_API_KEY).'
+      if (response.status === 404) customError = 'Modelo de Inteligência Artificial indisponível.'
+      if (response.status === 429 || response.status === 503) customError = 'Servidores do Google Gemini estão sobrecarregados (Alta Demanda).'
+      return NextResponse.json({ error: customError }, { status: response.status })
     }
 
     const aiData = await response.json()
@@ -120,7 +124,7 @@ DIRETRIZES FUNDAMENTAIS:
       title: ins.title,
       content: ins.content,
       priority: ins.priority || 'medium',
-      metadata: { source: 'gemini', model: 'gemini-2.5-flash' },
+      metadata: { source: 'gemini', model: 'gemini-1.5-flash' },
     }))
 
     const { error: insertError } = await supabase.from('ai_insights').insert(insightsToInsert)

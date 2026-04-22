@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { Sparkles, RefreshCw, CheckCheck, X, TrendingUp, AlertTriangle, PiggyBank, Lightbulb, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { AIInsight } from '@/types'
-import AppLayout from '@/components/AppLayout'
 import { formatDate } from '@/lib/utils'
 
 const INSIGHT_ICONS: Record<string, React.ReactNode> = {
@@ -47,11 +46,14 @@ export default function AIInsightsPage() {
     setGenerating(true)
     try {
       const res = await fetch('/api/ai-insights/generate', { method: 'POST' })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        throw new Error(payload.error || 'Erro interno na comunicação com o servidor.')
+      }
       toast.success('Novos insights gerados!')
       load()
-    } catch {
-      toast.error('Erro ao gerar insights. Verifique se a API de IA está configurada.')
+    } catch (err: any) {
+      toast.error(err.message || 'Falha ao gerar insights.')
     } finally {
       setGenerating(false)
     }
@@ -71,7 +73,7 @@ export default function AIInsightsPage() {
   const unread = activeInsights.filter(i => !i.is_read)
 
   return (
-    <AppLayout>
+    <>
       <div className="animate-fade-in space-y-6">
         {/* Header */}
         <div className="page-header">
@@ -156,7 +158,7 @@ export default function AIInsightsPage() {
           </div>
         )}
       </div>
-    </AppLayout>
+    </>
   )
 }
 
