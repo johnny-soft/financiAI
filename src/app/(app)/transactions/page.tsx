@@ -5,7 +5,6 @@ import { Plus, Search, Filter, ArrowUpRight, ArrowDownRight, Pencil, Trash2, X }
 import { formatCurrency, formatDate, PAYMENT_METHOD_LABELS } from '@/lib/utils'
 import type { Transaction, Category, Account } from '@/types'
 import TransactionModal from '@/components/transactions/TransactionModal'
-import AppLayout from '@/components/AppLayout'
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -53,7 +52,7 @@ export default function TransactionsPage() {
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0)
 
   return (
-    <AppLayout>
+    <>
       <div className="animate-fade-in space-y-5">
         {/* Header */}
         <div className="page-header">
@@ -264,6 +263,6 @@ export default function TransactionsPage() {
           onSave={load}
         />
       )}
-    </AppLayout>
+    </>
   )
 }

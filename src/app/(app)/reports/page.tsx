@@ -7,7 +7,6 @@ import {
 } from 'recharts'
 import { formatCurrency, getMonthName } from '@/lib/utils'
 import type { MonthlyBalance, CategorySpending } from '@/types'
-import AppLayout from '@/components/AppLayout'
 
 interface ReportData {
   monthlyBalance: MonthlyBalance[]
@@ -34,7 +33,7 @@ export default function ReportsPage() {
   const now = new Date()
 
   return (
-    <AppLayout>
+    <>
       <div className="animate-fade-in space-y-6">
         <div className="page-header">
           <div>
@@ -212,7 +211,7 @@ export default function ReportsPage() {
           </>
         )}
       </div>
-    </AppLayout>
+    </>
   )
 }
 
