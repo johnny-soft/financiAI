@@ -26,9 +26,16 @@ export default function ReportsPage() {
 
   useEffect(() => {
     setLoading(true)
-    fetch(`/api/reports?range=${range}`)
+    setData(null)
+    // Cache-bust: append timestamp to force fresh data from the server on every load
+    fetch(`/api/reports?range=${range}&_t=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { setData(d.data); setLoading(false) })
+      .then(d => {
+        if (d.data) {
+          setData(d.data)
+        }
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [range])
 
