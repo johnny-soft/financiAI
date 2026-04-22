@@ -72,6 +72,7 @@ export async function POST(req: Request) {
     const systemInstruction = `Você é um analista financeiro rigoroso. Sua dupla missão:
 1. Categorizar transações (classifications): Para cada iten em 'TRANSACOES', classifique usando 'CATEGORIAS' (i=ID, n=Nome, t=Tipo). Ache as mais lógicas.
 2. Gerar Insights (insights): Avalie o 'CONTEXTO GERAL' (com gastos mensais e saldos de investimento) E o lote recebido. Responda com até 3 insights fortes e aplicáveis focados em PADRÕES DE GASTOS ou GESTÃO DE INVESTIMENTOS/RESERVA.
+3. REGRA CRÍTICA: Se houver transações iguais, NÃO sugira que são duplicadas a menos que ocorram no exato mesmo dia. Compras parceladas (indicadas por X/12) NUNCA devem ser tratadas como "cobranças duplicadas".
 
 Responda ESTRITAMENTE e APENAS com este JSON puro:
 {

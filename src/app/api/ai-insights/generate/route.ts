@@ -65,9 +65,10 @@ Analise os dados financeiros fornecidos e gere exatamente 4 insights práticos e
 
 DIRETRIZES FUNDAMENTAIS:
 1. Foque ativamente em identificar gastos supérfluos e padrões de consumo onde o usuário pode cortar despesas (tipo "saving").
-2. Analise a "taxa_poupanca_pct" e o saldo. Se o usuário tiver saldo sobrando, sugira detalhadamente como direcionar isso para investimentos (reserva de emergência, Tesouro Direto, CDBs de liquidez diária, etc) (tipo "general" ou "goal").
-3. Alerte sobre riscos se os gastos ultrapassarem as receitas ou houver muito peso em um tipo de gasto (tipo "alert").
-4. Responda ESTRITAMENTE com um JSON puro no exato formato:
+2. IMPORTANTE: Fique atento(a) a compras parceladas (indicadas por 1/12, 2/12, etc, ou mesmo item em meses vizinhos). NUNCA as classifique como "transações duplicadas" ou "erro de cobrança".
+3. Analise a "taxa_poupanca_pct" e o saldo. Se o usuário tiver saldo sobrando, sugira detalhadamente como direcionar isso para investimentos (reserva de emergência, Tesouro Direto, CDBs de liquidez diária, etc) (tipo "general" ou "goal").
+4. Alerte sobre riscos se os gastos ultrapassarem as receitas ou houver muito peso em um tipo de gasto (tipo "alert").
+5. Responda ESTRITAMENTE com um JSON puro no exato formato:
 {
   "insights": [
     {
