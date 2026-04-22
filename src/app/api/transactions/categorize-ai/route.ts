@@ -7,9 +7,9 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const apiKey = process.env.ANTHROPIC_API_KEY
+    const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
-      return NextResponse.json({ error: 'AI API key not configured. Add ANTHROPIC_API_KEY to your .env file.' }, { status: 400 })
+      return NextResponse.json({ error: 'AI API key not configured. Add GEMINI_API_KEY to your .env file.' }, { status: 400 })
     }
 
     // Try to parse body for specific IDs, otherwise fetch uncategorized
@@ -81,31 +81,30 @@ TRANSAÇÕES A CLASSIFICAR:
 ${transactionsText}
 `
 
-    // 4. Call Anthropic API
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // 4. Call Gemini API
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 1500,
-        temperature: 0.1,
-        system: "Você é uma API de processamento de dados JSON. Responda apenas com JSON.",
-        messages: [{ role: 'user', content: prompt }],
+        systemInstruction: { parts: [{ text: "Você é uma API de processamento de dados JSON rigorosa. Extraia e classifique os dados correspondendo APENAS com JSON no schema solicitado." }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: "application/json"
+        }
       }),
     })
 
     if (!response.ok) {
       const errText = await response.text()
-      console.error('Anthropic API Error:', errText)
+      console.error('Gemini API Error:', errText)
       return NextResponse.json({ error: 'Falha na API da IA' }, { status: 500 })
     }
 
     const aiData = await response.json()
-    const textContent = aiData.content?.[0]?.text ?? ''
+    const textContent = aiData.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
 
     // 5. Parse and update DB
     let parsed: { classifications: Array<{ transaction_id: string; category_id: string }> }
