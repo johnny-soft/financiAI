@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-**FinTrack** is a personal finance management web application targeting Brazilian users. It provides dashboard analytics, transaction tracking, budget management, financial goals, AI-powered insights, and automatic bank synchronization via the Pluggy open banking API.
+**FinTrack** is a personal finance management web application targeting Brazilian users. It provides dashboard analytics, transaction tracking, budget management, financial goals, AI-powered insights, automatic bank synchronization via the Pluggy open banking API, and a self-learning AI model (Gemini) that adapts to user categorization.
 
 **All UI text is in Brazilian Portuguese (pt-BR).** Currency is BRL. Date format is `dd/MM/yyyy`.
 
@@ -136,10 +136,13 @@ All tables live in Supabase (PostgreSQL). Primary keys are UUIDs (`uuid_generate
 | `ai_insights`        | AI-generated financial recommendations     |
 | `pluggy_sync_log`    | Sync audit trail for Pluggy integration    |
 
-### Key Database Functions
+### Key Database Details
 
+- **`transactions` table**: Uses the `metadata (JSONB)` column to track `manual_category: true`, which feeds into the AI's reverse-learning loop.
+- **`profiles` table**: Uses `ai_model` string to persist the user's selected Gemini API model.
 - `get_spending_by_category(user_id, start, end)` — Spending totals grouped by category
 - `get_monthly_balance(user_id, months)` — Monthly income/expense/balance trend
+
 
 ### Triggers
 
@@ -169,6 +172,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 # Pluggy
 PLUGGY_CLIENT_ID=
 PLUGGY_CLIENT_SECRET=
+
+# Google (Gemini)
+GEMINI_API_KEY=
 ```
 
 ---
