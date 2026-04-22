@@ -27,11 +27,16 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { name, icon, color, type } = await req.json()
+    const { name, icon, color, type, is_extraordinary } = await req.json()
     if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
 
     const { data, error } = await supabase.from('categories').insert({
-      user_id: user.id, name, icon: icon || '💰', color: color || '#6366f1', type: type || 'expense'
+      user_id: user.id,
+      name,
+      icon: icon || '💰',
+      color: color || '#6366f1',
+      type: type || 'expense',
+      is_extraordinary: is_extraordinary || false
     }).select().single()
 
     if (error) throw error
@@ -48,11 +53,11 @@ export async function PATCH(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { id, name, icon, color, type } = await req.json()
+    const { id, name, icon, color, type, is_extraordinary } = await req.json()
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
 
     const { data, error } = await supabase.from('categories')
-      .update({ name, icon, color, type })
+      .update({ name, icon, color, type, is_extraordinary })
       .eq('id', id)
       .eq('user_id', user.id)
       .select()
