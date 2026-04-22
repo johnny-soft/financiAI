@@ -25,6 +25,7 @@ interface BankAccount {
 export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile>({ full_name: '', monthly_income: 0, currency: 'BRL', ai_auto_categorization: false, ai_model: 'gemini-3.0-flash-lite' })
   const [creditCards, setCreditCards] = useState<BankAccount[]>([])
+  const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
@@ -58,6 +59,15 @@ export default function SettingsPage() {
       closing_day: a.closing_day ?? null,
       due_day: a.due_day ?? null,
     })))
+    
+    // Load dynamic models from Gemini API seamlessly
+    try {
+      const ms = await fetch('/api/ai-insights/models').then(r => r.json())
+      if (ms.data && ms.data.length > 0) setAvailableModels(ms.data)
+    } catch {
+      console.warn("Could not fetch models dynamically")
+    }
+
     setLoading(false)
   }, [supabase])
 
@@ -201,17 +211,20 @@ export default function SettingsPage() {
 
         {/* Seleção do Modelo Gemini */}
         <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
-          <label style={labelStyle}>Versão do Motor (Google Gemini)</label>
+          <label style={labelStyle}>Versão do Motor (Google Gemini Autorizado)</label>
           <select
-            value={profile.ai_model || 'gemini-3.0-flash-lite'}
+            value={profile.ai_model || ''}
             onChange={e => setProfile(p => ({ ...p, ai_model: e.target.value }))}
             style={inputStyle}
           >
-            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Rápido + Recente)</option>
-            <option value="gemini-3.0-flash-lite">Gemini 3.0 Flash Lite (Rápido + Estável)</option>
-            <option value="gemini-3.0-flash">Gemini 3.0 Flash (Padrão)</option>
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Equilibrado)</option>
-            <option value="gemini-2.5-pro">Gemini 2.5 Pro (Lento + Analítico)</option>
+            <option value="" disabled>Selecione um modelo...</option>
+            {availableModels.length > 0 ? (
+              availableModels.map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))
+            ) : (
+              <option value="loading">Consultando chave do Google...</option>
+            )}
           </select>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: 8 }}>
             Dica: Modelos &quot;Lite&quot; têm menos chances de sofrer gargalo/erro no plano gratuito em horários de pico.

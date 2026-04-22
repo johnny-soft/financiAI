@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Sparkles, RefreshCw, CheckCheck, X, TrendingUp, AlertTriangle, PiggyBank, Lightbulb, Loader2 } from 'lucide-react'
+import { Sparkles, RefreshCw, CheckCheck, X, TrendingUp, AlertTriangle, PiggyBank, Lightbulb, Loader2, Settings2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { createClient } from '@/lib/supabase/client'
 import type { AIInsight } from '@/types'
 import { formatDate } from '@/lib/utils'
 
@@ -32,6 +33,9 @@ export default function AIInsightsPage() {
   const [insights, setInsights] = useState<AIInsight[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('')
+  const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([])
+  const supabase = createClient()
 
   const load = async () => {
     setLoading(true)
@@ -40,7 +44,31 @@ export default function AIInsightsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { 
+    load() 
+
+    // Fetch models and prepopulate fallback if needed
+    fetch('/api/ai-insights/models').then(r => r.json()).then(ms => {
+      if (ms.data && ms.data.length > 0) setAvailableModels(ms.data)
+    }).catch(e => console.warn('Falhar ao carregar models:', e))
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase.from('profiles').select('ai_model').eq('id', user.id).single()
+          .then(({ data }) => {
+            if(data?.ai_model) setSelectedModel(data.ai_model)
+          })
+      }
+    })
+  }, [supabase])
+
+  const handleUpdateModel = async (newModel: string) => {
+    setSelectedModel(newModel)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await supabase.from('profiles').update({ ai_model: newModel }).eq('id', user.id)
+    }
+  }
 
   const handleGenerate = async () => {
     setGenerating(true)
@@ -84,14 +112,42 @@ export default function AIInsightsPage() {
               {unread.length > 0 && <span className="ml-2 badge income-badge">{unread.length} nova{unread.length > 1 ? 's' : ''}</span>}
             </p>
           </div>
-          <button
-            className="btn btn-primary"
-            onClick={handleGenerate}
-            disabled={generating}
-          >
-            {generating ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-            {generating ? 'Analisando…' : 'Gerar insights'}
-          </button>
+          <div className="flex items-center gap-3 mt-4 sm:mt-0">
+            <div className="relative">
+              <select 
+                value={selectedModel}
+                onChange={e => handleUpdateModel(e.target.value)}
+                disabled={generating}
+                className="appearance-none bg-transparent border py-2 pl-3 pr-8 rounded-lg outline-none text-sm font-medium transition-colors"
+                style={{
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-primary)',
+                  background: 'var(--bg-subtle)'
+                }}
+              >
+                <option value="" disabled>Selecionar...</option>
+                {availableModels.length > 0 ? (
+                  availableModels.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))
+                ) : (
+                  <option value="loading">Carregando...</option>
+                )}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                <Settings2 size={14} />
+              </div>
+            </div>
+
+            <button
+              className="btn btn-primary"
+              onClick={handleGenerate}
+              disabled={generating}
+            >
+              {generating ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              {generating ? 'Analisando…' : 'Gerar insights'}
+            </button>
+          </div>
         </div>
 
         {/* Info banner */}
