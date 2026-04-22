@@ -252,7 +252,7 @@ export default function TransactionsPage() {
               {/* Mobile list */}
               <div className="lg:hidden divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
                 {transactions.map(tx => (
-                  <div key={tx.id} className="p-4 flex items-center gap-3">
+                  <div key={tx.id} className="p-4 flex items-center gap-3 cursor-pointer hover:opacity-80 active:opacity-60 transition-opacity" onClick={() => { setEditTx(tx); setShowModal(true) }}>
                     <div className="w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0"
                       style={{ background: tx.type === 'income' ? 'color-mix(in srgb, var(--success) 12%, transparent)' : 'color-mix(in srgb, var(--danger) 10%, transparent)' }}>
                       {tx.category?.icon ?? '💰'}

@@ -134,6 +134,9 @@ Responda exclusivamente com um objeto JSON. Não inclua Markdown, explicações 
       return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 })
     }
 
+    // Limpar insights anteriores (Flush)
+    await supabase.from('ai_insights').delete().eq('user_id', user.id)
+
     // Save insights to DB
     const insightsToInsert = (parsed.insights ?? []).map((ins) => ({
       user_id: user.id,

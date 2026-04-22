@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
@@ -18,13 +19,14 @@ interface ReportData {
 }
 
 export default function ReportsPage() {
+  const router = useRouter()
   const [data, setData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [months, setMonths] = useState(6)
+  const [range, setRange] = useState('6m')
 
   useEffect(() => {
     setLoading(true)
-    fetch(`/api/reports?months=${months}`)
+    fetch(`/api/reports?range=${range}`)
       .then(r => r.json())
       .then(d => { setData(d.data); setLoading(false) })
       .catch(() => setLoading(false))
@@ -39,19 +41,20 @@ export default function ReportsPage() {
           <div>
             <h1 className="page-title">Relatórios</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: 2 }}>
-              Análise dos últimos {months} meses
+              Análise do período selecionado
             </p>
           </div>
-          <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--bg-subtle)' }}>
-            {[3, 6, 12].map(m => (
-              <button key={m} onClick={() => setMonths(m)} className="btn btn-ghost"
+          <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--bg-subtle)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            {['1d', '7d', '15d', '1m', '3m', '6m'].map(r => (
+              <button key={r} onClick={() => setRange(r)} className="btn btn-ghost"
                 style={{
                   padding: '5px 14px', fontSize: '0.8125rem', borderRadius: 6,
-                  background: months === m ? 'var(--bg-surface)' : 'transparent',
-                  color: months === m ? 'var(--text-primary)' : 'var(--text-muted)',
-                  boxShadow: months === m ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  background: range === r ? 'var(--bg-surface)' : 'transparent',
+                  color: range === r ? 'var(--text-primary)' : 'var(--text-muted)',
+                  boxShadow: range === r ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  textTransform: 'uppercase'
                 }}>
-                {m}M
+                {r}
               </button>
             ))}
           </div>
@@ -171,7 +174,7 @@ export default function ReportsPage() {
                       {data.categorySpending.filter(c => c.total > 0).slice(0, 6).map((cat, i) => {
                         const pct = data.totalExpense > 0 ? Math.round((cat.total / data.totalExpense) * 100) : 0
                         return (
-                          <div key={i} className="flex items-center gap-2">
+                          <div key={i} className="flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity" onClick={() => router.push(`/transactions?category=${cat.category_id}`)} title="Ver transações">
                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: cat.category_color }} />
                             <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', flex: 1 }}>
                               {cat.category_icon} {cat.category_name}

@@ -44,13 +44,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, categorizedCount: 0, message: 'Nenhuma transação sem categoria encontrada.' })
     }
 
-    // 2. Fetch user's categories, global context (monthly spending & investments)
+    // 2. Fetch user's categories, global context (monthly spending & investments), and explicit manual memory
     const { start, end } = getCurrentMonthRange()
-    const [categoriesRes, globalSpendingRes, investmentAccountsRes, profileRes] = await Promise.all([
+    const [categoriesRes, globalSpendingRes, investmentAccountsRes, profileRes, manualMemRes] = await Promise.all([
       supabase.from('categories').select('id, name, type').eq('user_id', user.id),
       supabase.rpc('get_spending_by_category', { p_user_id: user.id, p_start: start, p_end: end }),
       supabase.from('accounts').select('name, balance').eq('user_id', user.id).eq('type', 'investment'),
-      supabase.from('profiles').select('ai_model').eq('id', user.id).single()
+      supabase.from('profiles').select('ai_model').eq('id', user.id).single(),
+      supabase.from('transactions').select('description, category_id').eq('user_id', user.id).contains('metadata', { manual_category: true }).order('updated_at', { ascending: false }).limit(30)
     ])
 
     const aiModel = profileRes.data?.ai_model || 'gemini-3.0-flash-lite'
@@ -68,12 +69,17 @@ export async function POST(req: Request) {
     const packedCategories = JSON.stringify(categories.map(c => ({ i: c.id, n: c.name, t: c.type })))
     const packedTransactions = JSON.stringify(transactions.map(t => ({ i: t.id, d: t.description, v: t.amount, t: t.type })))
     const packedContext = JSON.stringify({ spending: monthlySpending, investments })
+    
+    // Process User AI Memory (Feedback loop)
+    const manualRules = (manualMemRes.data || []).filter(t => t.description && t.category_id).map(t => ({ d: t.description, c_id: t.category_id }))
+    const packedRules = manualRules.length > 0 ? JSON.stringify(manualRules) : '[]'
 
     const systemInstruction = `# ROLE
 Você é um Analista de Dados Financeiros e Estrategista de Alocação. Sua função é processar transações e converter dados brutos em inteligência de portfólio.
 
 # TASK 01: CLASSIFICAÇÃO
 Mapeie cada item em [TRANSACOES A CLASSIFICAR] para o "c_id" (ID da Categoria) correspondente em [CATEGORIAS].
+- MEMÓRIA DO USUÁRIO: Use as [REGRAS_MANUAIS] sempre que a transação for similar ao Histórico do Usuário. Prioridade Absoluta.
 - PARCELAMENTOS: Identifique padrões como "1/12". Trate como fluxo de caixa comprometido, NUNCA como erro.
 - DUPLICATAS: Aponte apenas se Valor, Nome e Data forem idênticos no mesmo dia.
 
@@ -97,9 +103,10 @@ Responda exclusivamente com o JSON abaixo. Sem textos explicativos.
       "msg": "Texto analítico de até 150 caracteres." 
     }
   ]
-}`
+}
+`
 
-    const userPrompt = `CATEGORIAS: ${packedCategories}\n\nCONTEXTO GERAL (Gastos do mês e Saldo Investimentos):\n${packedContext}\n\nTRANSACOES A CLASSIFICAR:\n${packedTransactions}`
+    const userPrompt = `CATEGORIAS: ${packedCategories}\n\nREGRAS_MANUAIS (HISTÓRICO DO USUÁRIO):\n${packedRules}\n\nCONTEXTO GERAL (Gastos do mês e Saldo Investimentos):\n${packedContext}\n\nTRANSACOES A CLASSIFICAR:\n${packedTransactions}`
 
     // 4. Call Gemini API using selected model
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${aiModel}:generateContent?key=${apiKey}`, {

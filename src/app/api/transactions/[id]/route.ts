@@ -10,6 +10,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const body = await req.json()
     const { description, amount, type, date, category_id, account_id, payment_method, notes, is_recurring } = body
 
+    // Buscar metadata vigente para não apagar o contexto do Pluggy
+    const { data: existingTx } = await supabase.from('transactions').select('metadata').eq('id', params.id).single()
+    const metadata = { ...(existingTx?.metadata || {}), manual_category: true }
+
     const { data, error } = await supabase
       .from('transactions')
       .update({
@@ -18,6 +22,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         account_id: account_id || null,
         payment_method: payment_method || 'other',
         notes: notes || null,
+        metadata,
         is_recurring: is_recurring ?? false,
       })
       .eq('id', params.id)
