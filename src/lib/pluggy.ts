@@ -192,27 +192,29 @@ export const PLUGGY_CATEGORY_MAP: Record<string, string> = {
   'Returns': 'Rendimentos',
 }
 
-// Descriptions/keywords that indicate a transfer (not income/expense)
+// Descriptions/keywords that indicate an INTER-ACCOUNT transfer (not real income/expense)
+// PIX enviado/recebido are NOT included — they are real payments/income in most cases
 const TRANSFER_KEYWORDS = [
   'transferencia entre contas', 'transferência entre contas',
   'pagamento de fatura', 'pgto fatura', 'pag fatura',
   'pagamento cartao', 'pagamento cartão',
-  'resgate', 'aplicação', 'aplicacao',
+  'resgate automatico', 'aplicação automática', 'aplicacao automatica',
   'transferência própria', 'transferencia propria',
-  'pix enviado', 'pix recebido',
+  'movimentação interna', 'movimentacao interna',
 ]
 
 function isTransfer(description: string, category?: string): boolean {
   const desc = description.toLowerCase()
-  // Check known transfer patterns
+  // Check known inter-account transfer patterns
   if (TRANSFER_KEYWORDS.some(kw => desc.includes(kw))) return true
-  // Pluggy category indicates transfer
+  // Pluggy category explicitly indicates transfer
   if (category && ['Transfer', 'Transfers', 'Credit Card Payment'].includes(category)) return true
   return false
 }
 
 export function mapPluggyTransaction(tx: PluggyTransaction, accountType?: string) {
   const isCredit = tx.type === 'CREDIT'
+  const isPositiveAmount = tx.amount > 0
   const pluggyCategory = tx.category || ''
 
   // Determine transaction type: income, expense, or transfer
@@ -225,7 +227,8 @@ export function mapPluggyTransaction(tx: PluggyTransaction, accountType?: string
     type = isCredit ? 'transfer' : 'expense'
   } else if (isTransfer(tx.description, pluggyCategory)) {
     type = 'transfer'
-  } else if (isCredit) {
+  } else if (isCredit || isPositiveAmount) {
+    // Money coming IN: Pluggy says CREDIT or amount is positive → income
     type = 'income'
   } else {
     type = 'expense'

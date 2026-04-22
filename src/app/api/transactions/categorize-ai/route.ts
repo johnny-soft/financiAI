@@ -2,6 +2,20 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentMonthRange } from '@/lib/utils'
 
+/**
+ * Normalize a transaction description for hash-map lookup.
+ * Strips numbers, store IDs, installment patterns, collapses whitespace.
+ */
+function normalizeDescription(desc: string): string {
+  return desc
+    .toLowerCase()
+    .replace(/\d+\/\d+/g, '')           // remove installment patterns (1/12)
+    .replace(/\b\d{3,}\b/g, '')          // remove long numbers (store IDs)
+    .replace(/[*#\-_.]+/g, ' ')          // remove special chars
+    .replace(/\s+/g, ' ')               // collapse whitespace
+    .trim()
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = createClient()
@@ -13,7 +27,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'AI API key not configured. Add GEMINI_API_KEY to your .env file.' }, { status: 400 })
     }
 
-    // Try to parse body for specific IDs, otherwise fetch uncategorized
+    // Parse optional body for specific IDs
     let transactionIdsToCategorize: string[] = []
     try {
       const body = await req.json()
@@ -21,10 +35,10 @@ export async function POST(req: Request) {
         transactionIdsToCategorize = body.transactionIds
       }
     } catch {
-      // Ignore if no body
+      // No body
     }
 
-    // 1. Fetch transactions to categorize
+    // 1. Fetch uncategorized transactions
     let txQuery = supabase
       .from('transactions')
       .select('id, description, amount, type, date')
@@ -38,139 +52,195 @@ export async function POST(req: Request) {
     }
 
     const { data: transactions, error: txError } = await txQuery
-
     if (txError) throw txError
     if (!transactions || transactions.length === 0) {
       return NextResponse.json({ success: true, categorizedCount: 0, message: 'Nenhuma transação sem categoria encontrada.' })
     }
 
-    // 2. Fetch user's categories, global context (monthly spending & investments), and explicit manual memory
+    // ========================================
+    // PHASE 1: CACHE LOOKUP (Hash Map)
+    // ========================================
+    const cachedResults: Array<{ txId: string; categoryId: string }> = []
+    const uncachedTransactions: typeof transactions = []
+
+    // Build normalized keys for all transactions
+    const normalizedMap = new Map<string, typeof transactions[0][]>()
+    for (const tx of transactions) {
+      const key = normalizeDescription(tx.description)
+      if (!normalizedMap.has(key)) normalizedMap.set(key, [])
+      normalizedMap.get(key)!.push(tx)
+    }
+
+    // Batch lookup in hash map
+    const normalizedKeys = [...normalizedMap.keys()]
+    const { data: cachedMappings } = await supabase
+      .from('category_hash_map')
+      .select('description_normalized, category_id')
+      .eq('user_id', user.id)
+      .in('description_normalized', normalizedKeys)
+
+    const cacheHits = new Map((cachedMappings ?? []).map(m => [m.description_normalized, m.category_id]))
+
+    for (const [key, txs] of normalizedMap.entries()) {
+      if (cacheHits.has(key)) {
+        for (const tx of txs) {
+          cachedResults.push({ txId: tx.id, categoryId: cacheHits.get(key)! })
+        }
+      } else {
+        uncachedTransactions.push(...txs)
+      }
+    }
+
+    // Apply cached results immediately (no AI needed!)
+    let cachedCount = 0
+    for (const { txId, categoryId } of cachedResults) {
+      const { error } = await supabase
+        .from('transactions').update({ category_id: categoryId })
+        .eq('id', txId).eq('user_id', user.id)
+      if (!error) cachedCount++
+    }
+
+    // Increment hit_count for used cache entries
+    if (cachedResults.length > 0) {
+      const hitKeys = [...new Set(cachedResults.map(r => {
+        const tx = transactions.find(t => t.id === r.txId)
+        return tx ? normalizeDescription(tx.description) : null
+      }).filter(Boolean))]
+
+      for (const key of hitKeys) {
+        await supabase.rpc('increment_hash_hit', { p_user_id: user.id, p_key: key as string }).catch(() => {
+          // RPC may not exist yet, ignore
+        })
+      }
+    }
+
+    // If everything was cached, return early!
+    if (uncachedTransactions.length === 0) {
+      return NextResponse.json({
+        success: true,
+        categorizedCount: cachedCount,
+        cachedCount,
+        aiCount: 0,
+        message: `${cachedCount} transações classificadas instantaneamente via cache!`
+      })
+    }
+
+    // ========================================
+    // PHASE 2: AI CLASSIFICATION (only unknowns)
+    // ========================================
     const { start, end } = getCurrentMonthRange()
-    const [categoriesRes, globalSpendingRes, investmentAccountsRes, profileRes, manualMemRes] = await Promise.all([
+    const [categoriesRes, globalSpendingRes, profileRes, manualMemRes] = await Promise.all([
       supabase.from('categories').select('id, name, type').eq('user_id', user.id),
       supabase.rpc('get_spending_by_category', { p_user_id: user.id, p_start: start, p_end: end }),
-      supabase.from('accounts').select('name, balance').eq('user_id', user.id).eq('type', 'investment'),
       supabase.from('profiles').select('ai_model').eq('id', user.id).single(),
       supabase.from('transactions').select('description, category_id').eq('user_id', user.id).contains('metadata', { manual_category: true }).order('updated_at', { ascending: false }).limit(30)
     ])
 
     const aiModel = profileRes.data?.ai_model || 'gemini-3.0-flash-lite'
-
     const categories = categoriesRes.data ?? []
     if (categories.length === 0) {
-      return NextResponse.json({ error: 'Nenhuma categoria configurada no perfil do usuário.' }, { status: 400 })
+      return NextResponse.json({ error: 'Nenhuma categoria configurada.' }, { status: 400 })
     }
 
     const monthlySpending = (globalSpendingRes.data ?? []).filter((c: { total: number }) => c.total > 0)
       .map((c: { category_name: string, total: number }) => ({ cat: c.category_name, total: c.total }))
-    const investments = investmentAccountsRes.data ?? []
 
-    // 3. Prepare payload for Gemini (Data Packing via Minified JSON)
-    const packedCategories = JSON.stringify(categories.map(c => ({ i: c.id, n: c.name, t: c.type })))
-    const packedTransactions = JSON.stringify(transactions.map(t => ({ i: t.id, d: t.description, v: t.amount, t: t.type })))
-    const packedContext = JSON.stringify({ spending: monthlySpending, investments })
-    
-    // Process User AI Memory (Feedback loop)
     const manualRules = (manualMemRes.data || []).filter(t => t.description && t.category_id).map(t => ({ d: t.description, c_id: t.category_id }))
+
+    const packedCategories = JSON.stringify(categories.map(c => ({ i: c.id, n: c.name, t: c.type })))
+    const packedTransactions = JSON.stringify(uncachedTransactions.map(t => ({ i: t.id, d: t.description, v: t.amount, t: t.type })))
+    const packedContext = JSON.stringify({ spending: monthlySpending })
     const packedRules = manualRules.length > 0 ? JSON.stringify(manualRules) : '[]'
 
     const systemInstruction = `# ROLE
-Você é um Analista de Dados Financeiros e Estrategista de Alocação. Sua função é processar transações e converter dados brutos em inteligência de portfólio.
+Você é um Classificador de Dados Financeiros. Classifique cada transação na categoria mais adequada.
 
-# TASK 01: CLASSIFICAÇÃO
-Mapeie cada item em [TRANSACOES A CLASSIFICAR] para o "c_id" (ID da Categoria) correspondente em [CATEGORIAS].
-- MEMÓRIA DO USUÁRIO: Use as [REGRAS_MANUAIS] sempre que a transação for similar ao Histórico do Usuário. Prioridade Absoluta.
-- PARCELAMENTOS: Identifique padrões como "1/12". Trate como fluxo de caixa comprometido, NUNCA como erro.
-- DUPLICATAS: Aponte apenas se Valor, Nome e Data forem idênticos no mesmo dia.
+# REGRAS
+- Use [REGRAS_MANUAIS] como prioridade absoluta para transações similares.
+- PARCELAMENTOS (X/12): Fluxo de caixa comprometido, NUNCA erro.
+- DUPLICATAS: Apenas se Valor, Nome e Data forem idênticos.
 
-# TASK 02: INSIGHTS DE ALOCAÇÃO E ECONOMIA
-Analise o [CONTEXTO GERAL] e o lote atual. Gere até 3 insights seguindo estes critérios:
-1. RESERVA: Se não houver reserva de emergência, priorize liquidez diária (CDB/Tesouro Selic).
-2. DIVIDENDOS: Se houver saldo livre, sugira aportes em setores perenes da B3 (Bancário, Elétrico, Saneamento ou Commodities) focando em Dividend Yield.
-3. EFICIÊNCIA: Identifique picos de gastos em categorias não-essenciais que prejudicam a capacidade de aporte.
-
-# OUTPUT CONSTRAINT (STRICT JSON ONLY)
-Responda exclusivamente com o JSON abaixo. Sem textos explicativos.
-
+# OUTPUT (STRICT JSON ONLY)
 {
   "classifications": [
     { "t_id": "ID_DA_TRANSACAO", "c_id": "ID_DA_CATEGORIA" }
-  ],
-  "insights": [
-    { 
-      "type": "alert|goal|saving", 
-      "sector": "Setor Sugerido ou N/A",
-      "msg": "Texto analítico de até 150 caracteres." 
-    }
   ]
-}
-`
+}`
 
-    const userPrompt = `CATEGORIAS: ${packedCategories}\n\nREGRAS_MANUAIS (HISTÓRICO DO USUÁRIO):\n${packedRules}\n\nCONTEXTO GERAL (Gastos do mês e Saldo Investimentos):\n${packedContext}\n\nTRANSACOES A CLASSIFICAR:\n${packedTransactions}`
+    const userPrompt = `CATEGORIAS: ${packedCategories}\n\nREGRAS_MANUAIS:\n${packedRules}\n\nCONTEXTO:\n${packedContext}\n\nTRANSACOES:\n${packedTransactions}`
 
-    // 4. Call Gemini API using selected model
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${aiModel}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemInstruction }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+        generationConfig: { temperature: 0.05, responseMimeType: "application/json" }
       }),
     })
 
     if (!response.ok) {
       const errText = await response.text()
       console.error('Gemini API Error:', errText)
-      return NextResponse.json({ error: 'Falha na API da IA' }, { status: 500 })
+      return NextResponse.json({ error: 'Falha na API da IA', cachedCount }, { status: 500 })
     }
 
     const aiData = await response.json()
     const textContent = aiData.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
 
-    // 5. Parse and update DB
-    let parsed: { 
-      classifications: Array<{ transaction_id?: string; category_id?: string; t_id?: string; c_id?: string }>,
-      insights?: Array<{ type: string; title?: string; msg?: string; sector?: string; description?: string; action?: string; content?: string; priority?: string }>
-    }
+    let parsed: { classifications: Array<{ t_id?: string; c_id?: string; transaction_id?: string; category_id?: string }> }
     try {
-      const cleanJson = textContent.replace(/```json|```/g, '').trim()
-      parsed = JSON.parse(cleanJson)
-    } catch (parseErr) {
-      console.error('Falha ao parsear JSON da IA:', textContent)
-      return NextResponse.json({ error: 'Formato inválido retornado pela IA' }, { status: 500 })
+      parsed = JSON.parse(textContent.replace(/```json|```/g, '').trim())
+    } catch {
+      console.error('AI parse error:', textContent)
+      return NextResponse.json({ error: 'Formato inválido da IA', cachedCount }, { status: 500 })
     }
 
-    // 5.1 Atualizar Transações
-    let updatedCount = 0
+    // Apply AI results and SAVE TO CACHE
+    let aiCount = 0
+    const newCacheEntries: Array<{ user_id: string; description_normalized: string; category_id: string }> = []
+
     for (const item of parsed.classifications || []) {
-      const txId = item.transaction_id || item.t_id
-      const catId = item.category_id || item.c_id
+      const txId = item.t_id || item.transaction_id
+      const catId = item.c_id || item.category_id
       if (!txId || !catId) continue
+
       const { error: updateErr } = await supabase
         .from('transactions').update({ category_id: catId })
         .eq('id', txId).eq('user_id', user.id)
-      if (!updateErr) updatedCount++
+
+      if (!updateErr) {
+        aiCount++
+        // Find the original transaction to cache it
+        const tx = uncachedTransactions.find(t => t.id === txId)
+        if (tx) {
+          const key = normalizeDescription(tx.description)
+          if (key.length > 2) {
+            newCacheEntries.push({
+              user_id: user.id,
+              description_normalized: key,
+              category_id: catId,
+            })
+          }
+        }
+      }
     }
 
-    // 5.2 Salvar Insights (Se gerados)
-    if (parsed.insights && parsed.insights.length > 0) {
-      const insightsToInsert = parsed.insights.map((ins) => ({
-        user_id: user.id,
-        type: ['saving', 'spending', 'goal', 'alert', 'general'].includes(ins.type) ? ins.type : 'general',
-        title: ins.title || (ins.sector && ins.sector !== 'N/A' ? `Estratégia: ${ins.sector}` : 'Visão Analítica'),
-        content: ins.msg || (ins.description && ins.action ? `${ins.description}\n\n📍 Ação Prática: ${ins.action}` : (ins.content || '')),
-        priority: ins.priority || 'medium',
-        metadata: { source: 'gemini-auto', model: aiModel },
-      }))
-      await supabase.from('ai_insights').insert(insightsToInsert)
+    // Batch insert new cache entries (ignore duplicates via upsert)
+    if (newCacheEntries.length > 0) {
+      await supabase
+        .from('category_hash_map')
+        .upsert(newCacheEntries, { onConflict: 'user_id,description_normalized' })
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      categorizedCount: updatedCount,
-      transactionsAttempted: transactions.length,
-      insightsGenerated: parsed.insights?.length || 0
+    return NextResponse.json({
+      success: true,
+      categorizedCount: cachedCount + aiCount,
+      cachedCount,
+      aiCount,
+      message: cachedCount > 0
+        ? `⚡ ${cachedCount} via cache instantâneo + ${aiCount} via IA Gemini`
+        : `${aiCount} transações classificadas pela IA`,
     })
 
   } catch (err) {
