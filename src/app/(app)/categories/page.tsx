@@ -181,28 +181,27 @@ export default function CategoriesPage() {
                 />
               ))}
             </div>
-          </div>
 
-          <div style={{ marginBottom: '1rem', padding: '10px 12px', borderRadius: 8, background: isExtraordinary ? 'rgba(245, 158, 11, 0.08)' : 'var(--bg-subtle)', border: isExtraordinary ? '1px solid rgba(245, 158, 11, 0.25)' : '1px solid transparent', transition: 'all 0.2s' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={isExtraordinary}
-                onChange={e => setIsExtraordinary(e.target.checked)}
-                style={{ width: 18, height: 18, accentColor: 'var(--warning)' }}
-              />
-              <div>
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: isExtraordinary ? 'var(--warning)' : 'var(--text-secondary)' }}>
-                  Categoria Extraordinária
-                </span>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                  Transações nesta categoria serão excluídas das médias mensais por padrão.
-                </p>
-              </div>
-            </label>
-          </div>
+            <div style={{ marginBottom: '1rem', padding: '10px 12px', borderRadius: 8, background: isExtraordinary ? 'rgba(245, 158, 11, 0.08)' : 'var(--bg-subtle)', border: isExtraordinary ? '1px solid rgba(245, 158, 11, 0.25)' : '1px solid transparent', transition: 'all 0.2s' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={isExtraordinary}
+                  onChange={e => setIsExtraordinary(e.target.checked)}
+                  style={{ width: 18, height: 18, accentColor: 'var(--warning)' }}
+                />
+                <div>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: isExtraordinary ? 'var(--warning)' : 'var(--text-secondary)' }}>
+                    Categoria Extraordinária
+                  </span>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                    Transações nesta categoria serão excluídas das médias mensais por padrão.
+                  </p>
+                </div>
+              </label>
+            </div>
 
-          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
               <button type="submit" className="btn btn-primary">
                 {editingId ? 'Salvar' : 'Criar'}
               </button>
