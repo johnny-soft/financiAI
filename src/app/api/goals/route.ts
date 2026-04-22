@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { title, description, icon, target_amount, current_amount, target_date, category } = body
 
-    const { data, error } = await supabase.from('goals').insert({
+    const { data: goal, error } = await supabase.from('goals').insert({
       user_id: user.id,
       title,
       description: description || null,
@@ -41,7 +41,18 @@ export async function POST(req: NextRequest) {
     }).select().single()
 
     if (error) throw error
-    return NextResponse.json({ data }, { status: 201 })
+
+    // Criar a categoria associada à meta
+    await supabase.from('categories').insert({
+      user_id: user.id,
+      name: `🎯 Meta: ${title}`,
+      icon: icon || '🎯',
+      color: '#10b981', // Verde sucesso para metas
+      type: 'expense',
+      goal_id: goal.id
+    })
+
+    return NextResponse.json({ data: goal }, { status: 201 })
   } catch (err) {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }

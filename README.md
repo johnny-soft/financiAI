@@ -51,7 +51,7 @@ GEMINI_API_KEY=your_google_studio_key
 
 1. Clone o pacote do repositório:
    ```bash
-   git clone https://github.com/seu-user/finai.git
+   git clone https://github.com/johnny-soft/financiAI.git
    ```
 
 2. Instale todas as dependências com NPM, Yarn ou Pnpm:

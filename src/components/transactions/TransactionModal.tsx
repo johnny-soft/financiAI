@@ -49,8 +49,7 @@ export default function TransactionModal({ transaction, categories, accounts, on
   )
 
   const handleSubmit = async () => {
-    if (!form.description.trim()) return toast.error('Informe uma descrição')
-    if (!form.amount || isNaN(Number(form.amount))) return toast.error('Informe um valor válido')
+    if (!form.description?.trim()) return toast.error('Informe uma descrição')
 
     setSaving(true)
     try {
