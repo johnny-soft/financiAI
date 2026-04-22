@@ -21,6 +21,7 @@ export async function POST() {
       supabase.from('transactions')
         .select('amount, type, date, description, category:categories(name)')
         .eq('user_id', user.id)
+        .neq('type', 'transfer')
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: false })

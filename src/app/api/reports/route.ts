@@ -26,16 +26,18 @@ export async function GET(req: NextRequest) {
 
     const trendMonthsToRequest = isDays ? 1 : value
 
-    const [trendRes, categoryRes] = await Promise.all([
+    const [trendRes, categoryRes, totalsRes] = await Promise.all([
       supabase.rpc('get_monthly_balance', { p_user_id: user.id, p_months: trendMonthsToRequest }),
       supabase.rpc('get_spending_by_category', { p_user_id: user.id, p_start: start, p_end: end }),
+      supabase.from('transactions').select('amount, type').eq('user_id', user.id).neq('type', 'transfer').gte('date', start).lte('date', end)
     ])
 
     const monthlyBalance = trendRes.data ?? []
     const categorySpending = (categoryRes.data ?? []).filter((c: { total: number }) => c.total > 0)
+    const txs = totalsRes.data ?? []
 
-    const totalIncome = monthlyBalance.reduce((a: number, m: { income: number }) => a + m.income, 0)
-    const totalExpense = monthlyBalance.reduce((a: number, m: { expense: number }) => a + m.expense, 0)
+    const totalIncome = txs.filter((t: { type: string }) => t.type === 'income').reduce((a: number, t: { amount: number }) => a + t.amount, 0)
+    const totalExpense = txs.filter((t: { type: string }) => t.type === 'expense').reduce((a: number, t: { amount: number }) => a + t.amount, 0)
     const avgMonthlyExpense = monthlyBalance.length > 0 ? totalExpense / monthlyBalance.length : 0
     const topExpenseCategory = categorySpending.length > 0 ? categorySpending[0] : null
 
