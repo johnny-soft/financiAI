@@ -10,6 +10,7 @@ interface Profile {
   monthly_income: number
   currency: string
   ai_auto_categorization?: boolean
+  ai_model?: string
 }
 
 interface BankAccount {
@@ -22,7 +23,7 @@ interface BankAccount {
 }
 
 export default function SettingsPage() {
-  const [profile, setProfile] = useState<Profile>({ full_name: '', monthly_income: 0, currency: 'BRL', ai_auto_categorization: false })
+  const [profile, setProfile] = useState<Profile>({ full_name: '', monthly_income: 0, currency: 'BRL', ai_auto_categorization: false, ai_model: 'gemini-3.0-flash-lite' })
   const [creditCards, setCreditCards] = useState<BankAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -33,7 +34,7 @@ export default function SettingsPage() {
     if (!user) return
 
     const [profileRes, accountsRes] = await Promise.all([
-      supabase.from('profiles').select('full_name, monthly_income, currency, ai_auto_categorization').eq('id', user.id).single(),
+      supabase.from('profiles').select('full_name, monthly_income, currency, ai_auto_categorization, ai_model').eq('id', user.id).single(),
       supabase.from('accounts').select('id, name, institution, type, closing_day, due_day').eq('user_id', user.id).eq('is_active', true),
     ])
 
@@ -43,6 +44,7 @@ export default function SettingsPage() {
         monthly_income: parseFloat(String(profileRes.data.monthly_income)) || 0,
         currency: profileRes.data.currency || 'BRL',
         ai_auto_categorization: profileRes.data.ai_auto_categorization ?? false,
+        ai_model: profileRes.data.ai_model || 'gemini-3.0-flash-lite',
       })
     }
 
@@ -71,6 +73,7 @@ export default function SettingsPage() {
       monthly_income: profile.monthly_income,
       currency: profile.currency,
       ai_auto_categorization: profile.ai_auto_categorization,
+      ai_model: profile.ai_model,
     }).eq('id', user.id)
 
     if (error) {
@@ -194,6 +197,25 @@ export default function SettingsPage() {
               style={{ background: profile.ai_auto_categorization ? 'var(--accent)' : 'var(--border-subtle)' }}
             ></div>
           </label>
+        </div>
+
+        {/* Seleção do Modelo Gemini */}
+        <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
+          <label style={labelStyle}>Versão do Motor (Google Gemini)</label>
+          <select
+            value={profile.ai_model || 'gemini-3.0-flash-lite'}
+            onChange={e => setProfile(p => ({ ...p, ai_model: e.target.value }))}
+            style={inputStyle}
+          >
+            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Rápido + Recente)</option>
+            <option value="gemini-3.0-flash-lite">Gemini 3.0 Flash Lite (Rápido + Estável)</option>
+            <option value="gemini-3.0-flash">Gemini 3.0 Flash (Padrão)</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Equilibrado)</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro (Lento + Analítico)</option>
+          </select>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: 8 }}>
+            Dica: Modelos &quot;Lite&quot; têm menos chances de sofrer gargalo/erro no plano gratuito em horários de pico.
+          </p>
         </div>
       </div>
 

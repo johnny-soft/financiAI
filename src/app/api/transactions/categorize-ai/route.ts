@@ -46,11 +46,14 @@ export async function POST(req: Request) {
 
     // 2. Fetch user's categories, global context (monthly spending & investments)
     const { start, end } = getCurrentMonthRange()
-    const [categoriesRes, globalSpendingRes, investmentAccountsRes] = await Promise.all([
+    const [categoriesRes, globalSpendingRes, investmentAccountsRes, profileRes] = await Promise.all([
       supabase.from('categories').select('id, name, type').eq('user_id', user.id),
       supabase.rpc('get_spending_by_category', { p_user_id: user.id, p_start: start, p_end: end }),
-      supabase.from('accounts').select('name, balance').eq('user_id', user.id).eq('type', 'investment')
+      supabase.from('accounts').select('name, balance').eq('user_id', user.id).eq('type', 'investment'),
+      supabase.from('profiles').select('ai_model').eq('id', user.id).single()
     ])
+
+    const aiModel = profileRes.data?.ai_model || 'gemini-3.0-flash-lite'
 
     const categories = categoriesRes.data ?? []
     if (categories.length === 0) {
@@ -78,8 +81,8 @@ Responda ESTRITAMENTE e APENAS com este JSON puro:
 
     const userPrompt = `CATEGORIAS: ${packedCategories}\n\nCONTEXTO GERAL (Gastos do mês e Saldo Investimentos):\n${packedContext}\n\nTRANSACOES A CLASSIFICAR:\n${packedTransactions}`
 
-    // 4. Call Gemini 3.0 Flash Lite API
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash-lite:generateContent?key=${apiKey}`, {
+    // 4. Call Gemini API using selected model
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${aiModel}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -129,7 +132,7 @@ Responda ESTRITAMENTE e APENAS com este JSON puro:
         title: ins.title,
         content: ins.content,
         priority: ins.priority || 'medium',
-        metadata: { source: 'gemini-auto', model: 'gemini-3.0-flash-lite' },
+        metadata: { source: 'gemini-auto', model: aiModel },
       }))
       await supabase.from('ai_insights').insert(insightsToInsert)
     }

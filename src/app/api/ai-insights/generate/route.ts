@@ -17,7 +17,7 @@ export async function POST() {
 
     // Gather financial data for context
     const [profileRes, txRes, goalsRes, categoryRes] = await Promise.all([
-      supabase.from('profiles').select('monthly_income').eq('id', user.id).single(),
+      supabase.from('profiles').select('monthly_income, ai_model').eq('id', user.id).single(),
       supabase.from('transactions')
         .select('amount, type, date, description, category:categories(name)')
         .eq('user_id', user.id)
@@ -33,6 +33,7 @@ export async function POST() {
     const goals = goalsRes.data ?? []
     const categories = (categoryRes.data ?? []).filter((c: { total: number }) => c.total > 0)
     const monthlyIncome = profileRes.data?.monthly_income ?? 0
+    const aiModel = profileRes.data?.ai_model || 'gemini-3.0-flash-lite'
 
     const totalIncome = transactions.filter((t) => t.type === 'income').reduce((a, t) => a + parseFloat(String(t.amount)), 0)
     const totalExpense = transactions.filter((t) => t.type === 'expense').reduce((a, t) => a + parseFloat(String(t.amount)), 0)
@@ -78,7 +79,7 @@ DIRETRIZES FUNDAMENTAIS:
   ]
 }`
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash-lite:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${aiModel}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -124,7 +125,7 @@ DIRETRIZES FUNDAMENTAIS:
       title: ins.title,
       content: ins.content,
       priority: ins.priority || 'medium',
-      metadata: { source: 'gemini', model: 'gemini-3.0-flash-lite' },
+      metadata: { source: 'gemini', model: aiModel },
     }))
 
     const { error: insertError } = await supabase.from('ai_insights').insert(insightsToInsert)
