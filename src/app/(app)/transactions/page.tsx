@@ -179,7 +179,7 @@ export default function TransactionsPage() {
               <table className="w-full hidden lg:table">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['Descrição', 'Categoria', 'Conta', 'Data', 'Método', 'Valor'].map(h => (
+                    {['Descrição', 'Categoria', 'Conta', 'Data', 'Método', 'Valor', ''].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         {h}
                       </th>
@@ -231,6 +231,11 @@ export default function TransactionsPage() {
                             {formatCurrency(tx.amount)}
                           </span>
                         </div>
+                      </td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                         <button className="btn btn-ghost p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors" onClick={(e) => { e.stopPropagation(); setEditTx(tx); setShowModal(true) }} title="Editar Categoria">
+                           <Pencil size={15} style={{ color: 'var(--text-muted)' }} />
+                         </button>
                       </td>
                     </tr>
                   ))}

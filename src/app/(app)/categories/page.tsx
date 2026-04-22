@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Tag } from 'lucide-react'
+import { Plus, Pencil, Trash2, X } from 'lucide-react'
 import type { Category } from '@/types'
 
 const ICONS = ['💰', '🍔', '🚗', '🏠', '❤️', '📚', '🎮', '👕', '📱', '📈', '💸', '💼', '💻', '📊', '✨', '🎯', '✈️', '🛒', '🎬', '⚡']
@@ -98,47 +98,44 @@ export default function CategoriesPage() {
         </button>
       </div>
 
-      {/* Form */}
+      {/* Form Modal */}
       {showForm && (
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <h3 style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: '1rem' }}>
-            {editingId ? 'Editar categoria' : 'Nova categoria'}
-          </h3>
-          <form onSubmit={handleSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem', marginBottom: '0.75rem' }}>
-              <input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Nome da categoria"
-                required
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg-base)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem',
-                  outline: 'none',
-                }}
-              />
-              <select
-                value={type}
-                onChange={e => setType(e.target.value as 'income' | 'expense' | 'both')}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg-base)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem',
-                  outline: 'none',
-                }}
-              >
-                <option value="expense">Despesa</option>
-                <option value="income">Receita</option>
-                <option value="both">Ambos</option>
-              </select>
+        <>
+          <div className="dialog-overlay" onClick={resetForm} />
+          <div className="dialog-content">
+            <div className="flex items-center justify-between mb-5">
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>
+                {editingId ? 'Editar categoria' : 'Nova categoria'}
+              </h2>
+              <button className="btn btn-ghost p-1.5" onClick={resetForm}>
+                <X size={18} />
+              </button>
             </div>
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="label">Nome da categoria</label>
+                <input
+                  className="input"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Ex: Assinaturas"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="label">Tipo financeiro</label>
+                <select
+                  className="input"
+                  value={type}
+                  onChange={e => setType(e.target.value as 'income' | 'expense' | 'both')}
+                >
+                  <option value="expense">Despesa</option>
+                  <option value="income">Receita</option>
+                  <option value="both">Ambos</option>
+                </select>
+              </div>
 
             {/* Icon picker */}
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>Ícone</p>
@@ -179,16 +176,17 @@ export default function CategoriesPage() {
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="submit" className="btn btn-primary">
-                {editingId ? 'Salvar' : 'Criar'}
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={resetForm}>
+            <div className="flex gap-2 mt-6">
+              <button type="button" className="btn btn-secondary flex-1" onClick={resetForm}>
                 Cancelar
+              </button>
+              <button type="submit" className="btn btn-primary flex-1">
+                {editingId ? 'Salvar' : 'Criar'}
               </button>
             </div>
           </form>
         </div>
+        </>
       )}
 
       {/* Expense categories */}
