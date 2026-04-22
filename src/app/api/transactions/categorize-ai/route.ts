@@ -69,15 +69,34 @@ export async function POST(req: Request) {
     const packedTransactions = JSON.stringify(transactions.map(t => ({ i: t.id, d: t.description, v: t.amount, t: t.type })))
     const packedContext = JSON.stringify({ spending: monthlySpending, investments })
 
-    const systemInstruction = `Você é um analista financeiro rigoroso. Sua dupla missão:
-1. Categorizar transações (classifications): Para cada iten em 'TRANSACOES', classifique usando 'CATEGORIAS' (i=ID, n=Nome, t=Tipo). Ache as mais lógicas.
-2. Gerar Insights (insights): Avalie o 'CONTEXTO GERAL' (com gastos mensais e saldos de investimento) E o lote recebido. Responda com até 3 insights fortes e aplicáveis focados em PADRÕES DE GASTOS ou GESTÃO DE INVESTIMENTOS/RESERVA.
-3. REGRA CRÍTICA: Se houver transações iguais, NÃO sugira que são duplicadas a menos que ocorram no exato mesmo dia. Compras parceladas (indicadas por X/12) NUNCA devem ser tratadas como "cobranças duplicadas".
+    const systemInstruction = `# ROLE
+Você é um Analista de Dados Financeiros e Estrategista de Alocação. Sua função é processar transações e converter dados brutos em inteligência de portfólio.
 
-Responda ESTRITAMENTE e APENAS com este JSON puro:
+# TASK 01: CLASSIFICAÇÃO
+Mapeie cada item em [TRANSACOES A CLASSIFICAR] para o "c_id" (ID da Categoria) correspondente em [CATEGORIAS].
+- PARCELAMENTOS: Identifique padrões como "1/12". Trate como fluxo de caixa comprometido, NUNCA como erro.
+- DUPLICATAS: Aponte apenas se Valor, Nome e Data forem idênticos no mesmo dia.
+
+# TASK 02: INSIGHTS DE ALOCAÇÃO E ECONOMIA
+Analise o [CONTEXTO GERAL] e o lote atual. Gere até 3 insights seguindo estes critérios:
+1. RESERVA: Se não houver reserva de emergência, priorize liquidez diária (CDB/Tesouro Selic).
+2. DIVIDENDOS: Se houver saldo livre, sugira aportes em setores perenes da B3 (Bancário, Elétrico, Saneamento ou Commodities) focando em Dividend Yield.
+3. EFICIÊNCIA: Identifique picos de gastos em categorias não-essenciais que prejudicam a capacidade de aporte.
+
+# OUTPUT CONSTRAINT (STRICT JSON ONLY)
+Responda exclusivamente com o JSON abaixo. Sem textos explicativos.
+
 {
-  "classifications": [ { "transaction_id": "i", "category_id": "i" } ],
-  "insights": [ { "type": "spending|saving|investment|alert", "title": "max 60 chars", "content": "Dica direta aplicável", "priority": "high|medium|low" } ]
+  "classifications": [
+    { "t_id": "ID_DA_TRANSACAO", "c_id": "ID_DA_CATEGORIA" }
+  ],
+  "insights": [
+    { 
+      "type": "alert|goal|saving", 
+      "sector": "Setor Sugerido ou N/A",
+      "msg": "Texto analítico de até 150 caracteres." 
+    }
+  ]
 }`
 
     const userPrompt = `CATEGORIAS: ${packedCategories}\n\nCONTEXTO GERAL (Gastos do mês e Saldo Investimentos):\n${packedContext}\n\nTRANSACOES A CLASSIFICAR:\n${packedTransactions}`
@@ -104,8 +123,8 @@ Responda ESTRITAMENTE e APENAS com este JSON puro:
 
     // 5. Parse and update DB
     let parsed: { 
-      classifications: Array<{ transaction_id: string; category_id: string }>,
-      insights?: Array<{ type: string; title: string; content: string; priority: string }>
+      classifications: Array<{ transaction_id?: string; category_id?: string; t_id?: string; c_id?: string }>,
+      insights?: Array<{ type: string; title?: string; msg?: string; sector?: string; description?: string; action?: string; content?: string; priority?: string }>
     }
     try {
       const cleanJson = textContent.replace(/```json|```/g, '').trim()
@@ -118,10 +137,12 @@ Responda ESTRITAMENTE e APENAS com este JSON puro:
     // 5.1 Atualizar Transações
     let updatedCount = 0
     for (const item of parsed.classifications || []) {
-      if (!item.transaction_id || !item.category_id) continue
+      const txId = item.transaction_id || item.t_id
+      const catId = item.category_id || item.c_id
+      if (!txId || !catId) continue
       const { error: updateErr } = await supabase
-        .from('transactions').update({ category_id: item.category_id })
-        .eq('id', item.transaction_id).eq('user_id', user.id)
+        .from('transactions').update({ category_id: catId })
+        .eq('id', txId).eq('user_id', user.id)
       if (!updateErr) updatedCount++
     }
 
@@ -130,8 +151,8 @@ Responda ESTRITAMENTE e APENAS com este JSON puro:
       const insightsToInsert = parsed.insights.map((ins) => ({
         user_id: user.id,
         type: ['saving', 'spending', 'goal', 'alert', 'general'].includes(ins.type) ? ins.type : 'general',
-        title: ins.title,
-        content: ins.content,
+        title: ins.title || (ins.sector && ins.sector !== 'N/A' ? `Estratégia: ${ins.sector}` : 'Visão Analítica'),
+        content: ins.msg || (ins.description && ins.action ? `${ins.description}\n\n📍 Ação Prática: ${ins.action}` : (ins.content || '')),
         priority: ins.priority || 'medium',
         metadata: { source: 'gemini-auto', model: aiModel },
       }))
