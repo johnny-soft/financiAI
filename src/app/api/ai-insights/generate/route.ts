@@ -78,7 +78,7 @@ DIRETRIZES FUNDAMENTAIS:
   ]
 }`
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash-lite:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -124,7 +124,7 @@ DIRETRIZES FUNDAMENTAIS:
       title: ins.title,
       content: ins.content,
       priority: ins.priority || 'medium',
-      metadata: { source: 'gemini', model: 'gemini-2.0-flash' },
+      metadata: { source: 'gemini', model: 'gemini-3.0-flash-lite' },
     }))
 
     const { error: insertError } = await supabase.from('ai_insights').insert(insightsToInsert)

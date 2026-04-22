@@ -125,9 +125,10 @@ export async function POST(req: Request) {
             totalAccountsSynced++
 
             // 3. Fetch transactions from Pluggy for this account
-            const twelveMonthsAgo = new Date()
-            twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
-            const from = twelveMonthsAgo.toISOString().split('T')[0]
+            const fromDate = new Date()
+            const syncMonths = existingAccount ? 3 : 12
+            fromDate.setMonth(fromDate.getMonth() - syncMonths)
+            const from = fromDate.toISOString().split('T')[0]
 
             const pluggyTransactions = await getPluggyTransactions(pAccount.id, from)
             console.log(`Account ${pAccount.name}: found ${pluggyTransactions.length} transactions`)

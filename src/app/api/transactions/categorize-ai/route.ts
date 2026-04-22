@@ -78,8 +78,8 @@ Responda ESTRITAMENTE e APENAS com este JSON puro:
 
     const userPrompt = `CATEGORIAS: ${packedCategories}\n\nCONTEXTO GERAL (Gastos do mês e Saldo Investimentos):\n${packedContext}\n\nTRANSACOES A CLASSIFICAR:\n${packedTransactions}`
 
-    // 4. Call Gemini 3.0 Flash API
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent?key=${apiKey}`, {
+    // 4. Call Gemini 3.0 Flash Lite API
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash-lite:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -129,7 +129,7 @@ Responda ESTRITAMENTE e APENAS com este JSON puro:
         title: ins.title,
         content: ins.content,
         priority: ins.priority || 'medium',
-        metadata: { source: 'gemini-auto', model: 'gemini-3.0-flash' },
+        metadata: { source: 'gemini-auto', model: 'gemini-3.0-flash-lite' },
       }))
       await supabase.from('ai_insights').insert(insightsToInsert)
     }
