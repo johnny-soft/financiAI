@@ -192,7 +192,12 @@ export default function DashboardPage() {
               </ResponsiveContainer>
               <div className="space-y-2 mt-2">
                 {data.topCategories.slice(0, 5).filter(c => c.total > 0).map((cat, i) => (
-                  <div key={i} className="flex items-center justify-between">
+                  <div
+                    key={i}
+                    className="flex items-center justify-between cursor-pointer hover:opacity-70 transition-opacity"
+                    onClick={() => window.location.href = `/transactions?category=${cat.category_id}`}
+                    title="Ver transações desta categoria"
+                  >
                     <div className="flex items-center gap-2">
                       <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: cat.category_color }} />
                       <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>

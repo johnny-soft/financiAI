@@ -47,7 +47,13 @@ export async function GET(req: NextRequest) {
         .lte('date', end)
     ])
 
-    const monthlyBalance = trendRes.data ?? []
+    // Parse RPC results to ensure numeric types (Supabase can return strings for DECIMAL)
+    const monthlyBalance = (trendRes.data ?? []).map((row: { month: string; income: number; expense: number; balance: number }) => ({
+      month: row.month,
+      income: parseFloat(String(row.income)) || 0,
+      expense: parseFloat(String(row.expense)) || 0,
+      balance: parseFloat(String(row.balance)) || 0,
+    }))
     const categorySpending = (categoryRes.data ?? []).filter((c: { total: number }) => parseFloat(String(c.total)) > 0)
     const txs = totalsRes.data ?? []
 

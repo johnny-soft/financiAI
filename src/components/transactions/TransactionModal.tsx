@@ -40,7 +40,7 @@ export default function TransactionModal({ transaction, categories, accounts, on
         payment_method: transaction.payment_method ?? 'other',
         notes: transaction.notes ?? '',
         is_recurring: transaction.is_recurring,
-        is_extraordinary: (transaction as any).is_extraordinary ?? false,
+        is_extraordinary: transaction.is_extraordinary ?? false,
       })
     }
   }, [transaction])

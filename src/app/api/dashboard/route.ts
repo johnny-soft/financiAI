@@ -44,6 +44,15 @@ export async function GET() {
 
     const { start, end } = getCurrentMonthRange()
 
+    // Fetch goal-linked category IDs to exclude from income/expense totals
+    const { data: goalCategories } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('user_id', user.id)
+      .not('goal_id', 'is', null)
+
+    const goalCategoryIds = new Set((goalCategories ?? []).map(c => c.id))
+
     // Run all queries in parallel
     const [
       accountsRes,
@@ -56,7 +65,7 @@ export async function GET() {
       supabase.from('accounts').select('*').eq('user_id', user.id).eq('is_active', true),
       // Monthly income/expenses (excludes transfers)
       supabase.from('transactions')
-        .select('amount, type, account_id')
+        .select('amount, type, account_id, category_id, is_extraordinary')
         .eq('user_id', user.id)
         .neq('type', 'transfer')
         .gte('date', start)
@@ -137,13 +146,18 @@ export async function GET() {
       debugInfo.allAccountTypes = accounts.map(a => ({ name: a.name, type: a.type }))
     }
 
-    // Income = only from non-credit-card accounts (real income)
-    const monthIncome = monthTx
+    // Filter: exclude extraordinary and goal-linked transactions from income/expense
+    const regularTxs = monthTx.filter((t) =>
+      !t.is_extraordinary && !goalCategoryIds.has(t.category_id as string)
+    )
+
+    // Income = only from non-credit-card accounts, excluding extraordinary/goals
+    const monthIncome = regularTxs
       .filter((t) => t.type === 'income' && !creditCardAccountIds.has(t.account_id))
       .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
 
-    // Expenses = all expense transactions this month
-    const monthExpense = monthTx
+    // Expenses = regular expense transactions this month (excluding extraordinary/goals)
+    const monthExpense = regularTxs
       .filter((t) => t.type === 'expense')
       .reduce((a, t) => a + parseFloat(String(t.amount)), 0)
 

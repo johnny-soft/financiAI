@@ -8,7 +8,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
-    const { description, amount, type, date, category_id, account_id, payment_method, notes, is_recurring } = body
+    const { description, amount, type, date, category_id, account_id, payment_method, notes, is_recurring, is_extraordinary } = body
 
     // Buscar metadata vigente de forma isolada e segura
     const { data: existingTxs } = await supabase.from('transactions').select('metadata').eq('id', params.id).eq('user_id', user.id).limit(1)
@@ -25,6 +25,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         notes: notes || null,
         metadata,
         is_recurring: is_recurring ?? false,
+        is_extraordinary: is_extraordinary ?? false,
       })
       .eq('id', params.id)
       .eq('user_id', user.id)

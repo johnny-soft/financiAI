@@ -30,7 +30,9 @@ export interface Category {
   icon: string
   color: string
   type: 'income' | 'expense' | 'both'
+  goal_id?: string | null
   is_default: boolean
+  is_extraordinary?: boolean
   created_at: string
 }
 
@@ -65,6 +67,7 @@ export interface Transaction {
   notes: string | null
   tags: string[]
   is_recurring: boolean
+  is_extraordinary: boolean
   recurrence_rule: string | null
   payment_method: PaymentMethod
   source: 'pluggy' | 'manual' | 'import'

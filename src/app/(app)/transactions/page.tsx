@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Plus, Search, Filter, ArrowUpRight, ArrowDownRight, Pencil, Trash2, X, Sparkles, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency, formatDate, PAYMENT_METHOD_LABELS } from '@/lib/utils'
@@ -8,6 +9,15 @@ import type { Transaction, Category, Account } from '@/types'
 import TransactionModal from '@/components/transactions/TransactionModal'
 
 export default function TransactionsPage() {
+  return (
+    <Suspense fallback={<div className="animate-pulse flex items-center justify-center p-20 text-muted">Carregando transações...</div>}>
+      <TransactionsContent />
+    </Suspense>
+  )
+}
+
+function TransactionsContent() {
+  const searchParams = useSearchParams()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -20,6 +30,14 @@ export default function TransactionsPage() {
   const [page, setPage] = useState(1)
   const [categorizing, setCategorizing] = useState(false)
   const PER_PAGE = 20
+
+  // Handle URL parameters on mount
+  useEffect(() => {
+    const cat = searchParams.get('category')
+    const type = searchParams.get('type')
+    if (cat) setCategoryFilter(cat)
+    if (type === 'income' || type === 'expense') setTypeFilter(type)
+  }, [searchParams])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -205,9 +223,21 @@ export default function TransactionsPage() {
                         </div>
                       </td>
                       <td style={{ padding: '12px 16px' }}>
-                        <span className="badge" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                          {tx.category?.name ?? '—'}
-                        </span>
+                        <div className="flex flex-wrap gap-1 items-center">
+                          <span className="badge" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                            {tx.category?.name ?? '—'}
+                          </span>
+                          {tx.is_extraordinary && (
+                            <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)', fontSize: '10px', fontWeight: 700, border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                              ⚡ EXTRAORDINÁRIA
+                            </span>
+                          )}
+                          {tx.category?.name?.includes('Meta:') && (
+                            <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', fontSize: '10px', fontWeight: 700, border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                              🎯 ALOCAÇÃO META
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td style={{ padding: '12px 16px', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                         {tx.account?.name ?? '—'}
@@ -247,7 +277,15 @@ export default function TransactionsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p style={{ fontWeight: 500, fontSize: '0.875rem' }} className="truncate">{tx.description}</p>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{tx.category?.name} · {formatDate(tx.date)}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{tx.category?.name} · {formatDate(tx.date)}</span>
+                        {tx.is_extraordinary && (
+                          <span style={{ color: 'var(--warning)', fontSize: '9px', fontWeight: 700 }}>⚡ EXTRA</span>
+                        )}
+                        {tx.category?.name?.includes('Meta:') && (
+                          <span style={{ color: 'var(--success)', fontSize: '9px', fontWeight: 700 }}>🎯 META</span>
+                        )}
+                      </div>
                     </div>
                     <span style={{
                       fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: '0.9375rem',

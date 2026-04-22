@@ -205,17 +205,24 @@ export default function ReportsPage() {
 
             {/* Top expense banner */}
             {data.topExpenseCategory && (
-              <div className="card p-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ background: 'var(--bg-subtle)' }}>
-                  {data.topExpenseCategory.category_icon}
+              <div
+                className="card p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/5 transition-colors"
+                onClick={() => router.push(`/transactions?category=${data.topExpenseCategory?.category_id}`)}
+                title="Ver transações desta categoria"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ background: 'var(--bg-subtle)' }}>
+                    {data.topExpenseCategory.category_icon}
+                  </div>
+                  <div>
+                    <p style={{ fontWeight: 600, fontSize: '0.9375rem' }}>Maior gasto: {data.topExpenseCategory.category_name}</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
+                      {formatCurrency(data.topExpenseCategory.total)} no período ·{' '}
+                      {data.totalExpense > 0 ? Math.round((data.topExpenseCategory.total / data.totalExpense) * 100) : 0}% do total de gastos
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p style={{ fontWeight: 600, fontSize: '0.9375rem' }}>Maior gasto: {data.topExpenseCategory.category_name}</p>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
-                    {formatCurrency(data.topExpenseCategory.total)} no período ·{' '}
-                    {data.totalExpense > 0 ? Math.round((data.topExpenseCategory.total / data.totalExpense) * 100) : 0}% do total de gastos
-                  </p>
-                </div>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--accent)' }}>Ver tudo →</span>
               </div>
             )}
           </>
