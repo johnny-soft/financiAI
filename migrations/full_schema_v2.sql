@@ -232,6 +232,11 @@ BEGIN
     (NEW.id, 'Investimentos', '📈', '#10b981', 'expense', true),
     (NEW.id, 'Salário', '💼', '#10b981', 'income', true),
     (NEW.id, 'Outros', '💸', '#6b7280', 'expense', true);
+
+  -- Auto-create Emergency Reserve goal
+  INSERT INTO public.goals (user_id, title, description, icon, target_amount, current_amount, category, status)
+  VALUES (NEW.id, 'Reserva de Emergência', 'Fundo de emergência para cobrir 6 meses de despesas essenciais.', '🛡️', 10000, 0, 'emergency', 'active');
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

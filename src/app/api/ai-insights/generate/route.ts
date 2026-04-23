@@ -41,18 +41,42 @@ export async function POST() {
     const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : '0'
 
     // ========================================
-    // RECOMPOSITION INDEX (Emergency Reserve Health)
+    // EMERGENCY RESERVE (from goals table)
     // ========================================
+    const emergencyGoals = goals.filter(g => g.category === 'emergency')
+    const emergencyReserveTotal = emergencyGoals.reduce((a, g) => a + parseFloat(String(g.current_amount ?? 0)), 0)
+    const emergencyReserveTarget = emergencyGoals.reduce((a, g) => a + parseFloat(String(g.target_amount ?? 0)), 0)
+
+    // Also consider savings/investment account balances as part of reserve
     const { data: reserveAccounts } = await supabase
       .from('accounts')
       .select('balance, type')
       .eq('user_id', user.id)
       .in('type', ['savings', 'investment'])
 
-    const totalReserve = (reserveAccounts ?? []).reduce((a, acc) => a + parseFloat(String(acc.balance ?? 0)), 0)
-    const idealReserve = totalExpense * 6 // 6 months of expenses
+    const accountReserveBalance = (reserveAccounts ?? []).reduce((a, acc) => a + parseFloat(String(acc.balance ?? 0)), 0)
+    const totalReserve = Math.max(emergencyReserveTotal, accountReserveBalance)
+    const idealReserve = totalExpense > 0 ? totalExpense * 6 : monthlyIncome * 6 // 6 months
     const recompositionIndex = idealReserve > 0 ? Math.round((totalReserve / idealReserve) * 100) : 100
     const reserveHealthy = recompositionIndex >= 100
+
+    // ========================================
+    // INVESTMENTS (from Pluggy via accounts)
+    // ========================================
+    const { data: investmentAccounts } = await supabase
+      .from('accounts')
+      .select('name, balance, institution, type')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .in('type', ['investment', 'savings'])
+
+    const investmentSummary = (investmentAccounts ?? []).map(acc => ({
+      nome: acc.name,
+      instituicao: acc.institution,
+      tipo: acc.type,
+      saldo: parseFloat(String(acc.balance ?? 0)),
+    }))
+    const totalInvested = investmentSummary.reduce((a, i) => a + i.saldo, 0)
 
     // Dynamic AI personality based on reserve health
     let personalityModifier = ''
@@ -74,10 +98,17 @@ export async function POST() {
       saldo_mes: totalIncome - totalExpense,
       taxa_poupanca_pct: savingsRate,
       reserva_emergencia: {
-        saldo_atual: totalReserve,
-        meta_ideal: Math.round(idealReserve),
+        saldo_meta: emergencyReserveTotal,
+        meta_total: emergencyReserveTarget,
+        saldo_contas_reserva: accountReserveBalance,
+        total_liquido: totalReserve,
+        meta_ideal_6m: Math.round(idealReserve),
         indice_recomposicao_pct: recompositionIndex,
         status: reserveHealthy ? 'SAUDÁVEL' : 'EM RECOMPOSIÇÃO',
+      },
+      investimentos: {
+        total_investido: totalInvested,
+        contas: investmentSummary,
       },
       gastos_por_categoria: categories.slice(0, 8).map((c: { category_name: string; total: number }) => ({
         categoria: c.category_name,
@@ -85,6 +116,7 @@ export async function POST() {
       })),
       metas_ativas: goals.map(g => ({
         titulo: g.title,
+        categoria: g.category,
         meta: g.target_amount,
         atual: g.current_amount,
         progresso_pct: g.target_amount > 0 ? ((g.current_amount / g.target_amount) * 100).toFixed(0) : 0,
@@ -97,12 +129,21 @@ export async function POST() {
 Você é um Consultor Financeiro Pessoal e CFO (Chief Financial Officer) especializado em otimização de renda, economia e investimentos no Brasil (B3). Sua missão é transformar transações brutas em inteligência de governança financeira.
 ${personalityModifier}
 
+# DADOS DISPONÍVEIS
+Os dados incluem:
+- Transações do mês (receitas e gastos operacionais)
+- Gastos por categoria
+- Metas financeiras ativas (incluindo reserva de emergência com categoria "emergency")
+- Investimentos: contas de investimento com saldo, instituição e tipo
+- Reserva de emergência: saldo atual da meta, meta ideal (6x despesa mensal), índice de recomposição
+
 # TASK: GERAÇÃO DE 4 INSIGHTS DE NEGÓCIO (STRICT RULES)
-Analise os dados financeiros fornecidos para gerar exatamente 4 insights práticos:
+Analise TODOS os dados financeiros (transações, investimentos, reserva de emergência, metas) para gerar exatamente 4 insights:
+
 1. SAVING (Foco em Consumo): Identifique gastos supérfluos ou recorrências que podem ser cortadas.
-2. PATRIMÔNIO (Foco em Ativos): Se houver aquisições extraordinárias (como terrenos), valide a conversão de liquidez em patrimônio imobilizado. NÃO classifique como "Gasto Excessivo".
-3. LIQUIDEZ (Foco em Risco): Avalie se o uso de reservas para metas ou ativos comprometeu a margem de segurança (mínimo 6x o custo fixo).
-4. GOAL (Foco em B3): Se houver saldo operacional, sugira alocação em setores perenes (Bancos, Energia, Saneamento) visando Dividend Yield, citando a estratégia de ativos como BBAS3 ou KLBN4 apenas como exemplo de setor.
+2. INVESTIMENTOS / PATRIMÔNIO (Foco em Portfólio): Analise a composição dos investimentos. Se houver concentração em uma classe, sugira diversificação. Avalie a distribuição entre renda fixa e variável. Se houver aquisições extraordinárias (como terrenos), valide a conversão de liquidez em patrimônio imobilizado.
+3. RESERVA DE EMERGÊNCIA (Foco em Risco): Analise o índice de recomposição. Se a reserva está abaixo de 6 meses de despesa, calcule quanto falta e sugira um aporte mensal para atingir a meta em X meses. Se já atingiu, parabenize e sugira próximos passos.
+4. GOAL (Foco em B3): Se houver saldo operacional E a reserva estiver saudável, sugira alocação em setores perenes (Bancos, Energia, Saneamento) visando Dividend Yield. Se a reserva NÃO estiver completa, sugira renda fixa com liquidez diária (Tesouro Selic, CDB DI).
 
 # DIRETRIZES FUNDAMENTAIS DE ANÁLISE:
 - PARCELAMENTOS: Identifique "X/12". NUNCA trate como duplicata ou erro. É compromisso de caixa futuro.

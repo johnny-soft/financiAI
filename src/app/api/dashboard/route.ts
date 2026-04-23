@@ -42,6 +42,27 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    // Ensure emergency reserve goal exists (idempotent)
+    const { data: existingReserve } = await supabase
+      .from('goals')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('category', 'emergency')
+      .maybeSingle()
+
+    if (!existingReserve) {
+      await supabase.from('goals').insert({
+        user_id: user.id,
+        title: 'Reserva de Emergência',
+        description: 'Fundo de emergência para cobrir 6 meses de despesas essenciais.',
+        icon: '🛡️',
+        target_amount: 10000,
+        current_amount: 0,
+        category: 'emergency',
+        status: 'active',
+      })
+    }
+
     const { start, end } = getCurrentMonthRange()
 
     // Fetch goal-linked category IDs to exclude from income/expense totals
