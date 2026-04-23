@@ -177,6 +177,16 @@ export interface PluggyAccount {
   }
 }
 
+export interface PluggyPaymentParticipant {
+  name?: string
+  branchNumber?: string
+  accountNumber?: string
+  documentNumber?: {
+    type?: 'CPF' | 'CNPJ'
+    value?: string
+  }
+}
+
 export interface PluggyTransaction {
   id: string
   accountId: string
@@ -187,9 +197,10 @@ export interface PluggyTransaction {
   type: 'CREDIT' | 'DEBIT'
   category: string | null
   paymentData: {
-    payer?: { name?: string }
-    receiver?: { name?: string }
+    payer?: PluggyPaymentParticipant
+    receiver?: PluggyPaymentParticipant
     paymentMethod?: string
+    reason?: string
   } | null
 }
 

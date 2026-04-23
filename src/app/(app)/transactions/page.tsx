@@ -86,6 +86,26 @@ function TransactionsContent() {
       setCategorizing(false)
     }
   }
+  const [detecting, setDetecting] = useState(false)
+
+  const handleDetectTransfers = async () => {
+    setDetecting(true)
+    try {
+      const res = await fetch('/api/transactions/detect-transfers', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro na API')
+      if (data.data?.detected > 0) {
+        toast.success(data.data.message)
+        load()
+      } else {
+        toast.success(data.data?.message || 'Nenhuma transferência gêmea detectada.')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao detectar transferências')
+    } finally {
+      setDetecting(false)
+    }
+  }
 
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0)
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0)
@@ -103,6 +123,15 @@ function TransactionsContent() {
             </p>
           </div>
           <div className="flex gap-2">
+            <button
+              className="btn btn-secondary"
+              onClick={handleDetectTransfers}
+              disabled={detecting}
+              title="Detectar transferências entre contas próprias"
+            >
+              {detecting ? <Loader2 size={16} className="animate-spin" /> : <Filter size={16} style={{ color: 'var(--warning)' }} />}
+              <span className="hidden sm:inline">Detectar transferências</span>
+            </button>
             <button
               className="btn btn-secondary"
               onClick={handleAutoCategorize}

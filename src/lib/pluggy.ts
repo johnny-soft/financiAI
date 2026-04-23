@@ -217,6 +217,12 @@ export function mapPluggyTransaction(tx: PluggyTransaction, accountType?: string
   const isPositiveAmount = tx.amount > 0
   const pluggyCategory = tx.category || ''
 
+  // Extract CPF/CNPJ from payer and receiver
+  const payerDoc = tx.paymentData?.payer?.documentNumber?.value ?? null
+  const receiverDoc = tx.paymentData?.receiver?.documentNumber?.value ?? null
+  const payerName = tx.paymentData?.payer?.name ?? null
+  const receiverName = tx.paymentData?.receiver?.name ?? null
+
   // Determine transaction type: income, expense, or transfer
   let type: 'income' | 'expense' | 'transfer'
 
@@ -226,6 +232,9 @@ export function mapPluggyTransaction(tx: PluggyTransaction, accountType?: string
     // DEBIT on a card = purchase → expense
     type = isCredit ? 'transfer' : 'expense'
   } else if (isTransfer(tx.description, pluggyCategory)) {
+    type = 'transfer'
+  } else if (payerDoc && receiverDoc && normalizeCpf(payerDoc) === normalizeCpf(receiverDoc)) {
+    // Same CPF on both sides = self-transfer between own accounts
     type = 'transfer'
   } else if (isCredit || isPositiveAmount) {
     // Money coming IN: Pluggy says CREDIT or amount is positive → income
@@ -243,8 +252,22 @@ export function mapPluggyTransaction(tx: PluggyTransaction, accountType?: string
     payment_method: mapPaymentMethod(tx.paymentData?.paymentMethod),
     source: 'pluggy' as const,
     pluggy_category: pluggyCategory,
-    metadata: { pluggy_category: pluggyCategory },
+    metadata: {
+      pluggy_category: pluggyCategory,
+      payer_cpf: payerDoc,
+      receiver_cpf: receiverDoc,
+      payer_name: payerName,
+      receiver_name: receiverName,
+    },
   }
+}
+
+/**
+ * Normalize a CPF/CNPJ string by stripping all non-digit characters.
+ * "882.937.076-23" → "88293707623"
+ */
+function normalizeCpf(doc: string): string {
+  return doc.replace(/\D/g, '')
 }
 
 function mapPaymentMethod(method?: string): string {

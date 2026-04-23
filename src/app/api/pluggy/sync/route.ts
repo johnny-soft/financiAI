@@ -236,6 +236,25 @@ export async function POST(req: Request) {
       }
     }
 
+    // 7. Detect and reclassify self-transfers (twin transactions)
+    if (totalTransactionsSynced > 0) {
+      try {
+        const detectUrl = new URL('/api/transactions/detect-transfers', req.url)
+        const detectRes = await fetch(detectUrl.toString(), {
+          method: 'POST',
+          headers: {
+            cookie: req.headers.get('cookie') || ''
+          }
+        })
+        const detectData = await detectRes.json()
+        if (detectData.data?.detected > 0) {
+          console.log(`Twin detection: ${detectData.data.detected} transfer pair(s) reclassified`)
+        }
+      } catch (detectErr) {
+        console.error('Failed to trigger transfer detection:', detectErr)
+      }
+    }
+
     return NextResponse.json({
       data: {
         accountsSynced: totalAccountsSynced,
