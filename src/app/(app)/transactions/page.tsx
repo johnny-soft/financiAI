@@ -23,7 +23,7 @@ function TransactionsContent() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense' | 'transfer'>('all')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editTx, setEditTx] = useState<Transaction | null>(null)
@@ -36,7 +36,7 @@ function TransactionsContent() {
     const cat = searchParams.get('category')
     const type = searchParams.get('type')
     if (cat) setCategoryFilter(cat)
-    if (type === 'income' || type === 'expense') setTypeFilter(type)
+    if (type === 'income' || type === 'expense' || type === 'transfer') setTypeFilter(type)
   }, [searchParams])
 
   const load = useCallback(async () => {
@@ -159,7 +159,7 @@ function TransactionsContent() {
 
           {/* Type filter */}
           <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--bg-subtle)' }}>
-            {(['all', 'income', 'expense'] as const).map(t => (
+            {(['all', 'income', 'expense', 'transfer'] as const).map(t => (
               <button
                 key={t}
                 onClick={() => { setTypeFilter(t); setPage(1) }}
@@ -169,13 +169,13 @@ function TransactionsContent() {
                   fontSize: '0.8125rem',
                   background: typeFilter === t ? 'var(--bg-surface)' : 'transparent',
                   color: typeFilter === t
-                    ? t === 'income' ? 'var(--success)' : t === 'expense' ? 'var(--danger)' : 'var(--text-primary)'
+                    ? t === 'income' ? 'var(--success)' : t === 'expense' ? 'var(--danger)' : t === 'transfer' ? 'var(--warning)' : 'var(--text-primary)'
                     : 'var(--text-muted)',
                   boxShadow: typeFilter === t ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                   borderRadius: 6,
                 }}
               >
-                {t === 'all' ? 'Todos' : t === 'income' ? 'Receitas' : 'Gastos'}
+                {t === 'all' ? 'Todos' : t === 'income' ? 'Receitas' : t === 'expense' ? 'Gastos' : 'Transferências'}
               </button>
             ))}
           </div>

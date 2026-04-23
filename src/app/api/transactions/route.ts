@@ -25,7 +25,15 @@ export async function GET(req: NextRequest) {
       .range(from, to)
 
     if (q) query = query.ilike('description', `%${q}%`)
-    if (type && type !== 'all') query = query.eq('type', type)
+    // Hide transfers by default; only show when explicitly requested
+    if (type === 'transfer') {
+      query = query.eq('type', 'transfer')
+    } else if (type && type !== 'all') {
+      query = query.eq('type', type)
+    } else {
+      // 'all' or no filter → exclude transfers (they're internal movements)
+      query = query.neq('type', 'transfer')
+    }
     if (category) query = query.eq('category_id', category)
 
     const { data, error, count } = await query

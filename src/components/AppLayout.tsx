@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ArrowLeftRight, Tag, Target,
   BarChart2, Settings, Sparkles, RefreshCw,
-  ChevronRight, Sun, Moon, Landmark, Menu, X, LogOut
+  ChevronRight, Sun, Moon, Landmark, Menu, X, LogOut, TrendingUp
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/transactions', icon: ArrowLeftRight, label: 'Transações' },
   { href: '/categories', icon: Tag, label: 'Categorias' },
   { href: '/goals', icon: Target, label: 'Metas' },
+  { href: '/investments', icon: TrendingUp, label: 'Investimentos' },
   { href: '/reports', icon: BarChart2, label: 'Relatórios' },
   { href: '/ai-insights', icon: Sparkles, label: 'IA Financeira' },
 ]

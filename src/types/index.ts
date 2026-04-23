@@ -204,6 +204,49 @@ export interface PluggyTransaction {
   } | null
 }
 
+// Pluggy Investment types
+export interface PluggyInvestment {
+  id: string
+  itemId: string
+  name: string
+  number: string | null
+  balance: number
+  amount: number
+  taxes: number
+  date: string
+  value: number
+  quantity: number
+  annualRate: number | null
+  currencyCode: string
+  code: string | null
+  isin: string | null
+  type: 'FIXED_INCOME' | 'MUTUAL_FUND' | 'EQUITY' | 'ETF' | 'COE' | 'OTHER'
+  subtype: string | null
+  metadata: Record<string, unknown> | null
+  lastMonthRate: number | null
+  lastTwelveMonthsRate: number | null
+  status: string | null
+}
+
+// Frontend Investment interface
+export interface Investment {
+  id: string
+  name: string
+  type: string    // Translated: 'Renda Fixa', 'Fundos', 'Ações', etc.
+  subtype: string // CDB, LCI, FII, etc.
+  amount: number  // Gross amount
+  taxes: number
+  netAmount: number
+  date: string
+  quantity: number
+  unitValue: number
+  annualRate: number | null
+  lastMonthRate: number | null
+  last12mRate: number | null
+  institution: string
+  currencyCode: string
+}
+
 // API response types
 export interface ApiResponse<T> {
   data?: T

@@ -3,7 +3,7 @@
 // Uses Meu Pluggy OAuth flow for personal use
 // ============================================
 
-import type { PluggyAccount, PluggyTransaction } from '@/types'
+import type { PluggyAccount, PluggyTransaction, PluggyInvestment } from '@/types'
 
 const PLUGGY_BASE_URL = 'https://api.pluggy.ai'
 
@@ -124,6 +124,32 @@ export async function createConnectToken(itemId?: string) {
   })
 
   return data.accessToken
+}
+
+// Get investments for an item (with pagination)
+export async function getPluggyInvestments(itemId: string): Promise<PluggyInvestment[]> {
+  const allInvestments: PluggyInvestment[] = []
+  let page = 1
+  const pageSize = 500
+
+  while (true) {
+    const params = new URLSearchParams({ itemId })
+    params.set('pageSize', String(pageSize))
+    params.set('page', String(page))
+
+    const data = await pluggyFetch<{ results: PluggyInvestment[]; total: number }>(
+      `/investments?${params}`
+    )
+
+    allInvestments.push(...data.results)
+
+    if (allInvestments.length >= data.total || data.results.length < pageSize) {
+      break
+    }
+    page++
+  }
+
+  return allInvestments
 }
 
 // Map Pluggy account type to our AccountType
